@@ -1,6 +1,8 @@
 ---
 name: breakingdiff
 license: MIT
+metadata:
+  author: Benbird316
 description: Use when you are about to claim that two or more accounts of one artifact agree, on a read-through alone. A claim differential turns that claim into a recomputable readout. One executable claim per account, point-by-point over a shared parameter domain, four quadrants (common, divergence, dominance, neither) each with a live witness. Three jobs carry the demand. A Python to Rust/Go port against its source; a bug fix against the behaviour it promised to leave alone; an agent's early claim against the artifact it finally lands. It will report only divergence, never adjudicate. Needs N>=2 independent accounts whose parameter points can be enumerated, a change that raises no error, bivalent predicates. Do not trigger for one material, for an account that is prose and cannot be enumerated, line diffs, code-quality opinions, public-spec API compatibility (oasdiff covers it), tolerance-based numeric checks, or when a verdict on who is right is wanted.
 ---
 

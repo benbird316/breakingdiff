@@ -43,6 +43,13 @@ First public release.
   The agent case is bound to the enumerability requirement on purpose: drift that
   lives in prose cannot be parameterised, and claiming it could is the one way
   this description could over-promise.
+- **Attribution in frontmatter**: `metadata.author: Benbird316`, not a top-level
+  `author:` key. The frontmatter field set is closed —
+  `name` / `description` / `license` / `compatibility` / `metadata` /
+  `allowed-tools` — and `skills-ref` rejects anything else with
+  `Unexpected fields in frontmatter`. This was measured in both forms rather than
+  read off the spec: the top-level key fails validation, the nested form passes
+  and resolves to `{"author": "Benbird316"}` under `read-properties`.
 
 ### Verification gate
 
