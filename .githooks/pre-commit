@@ -13,8 +13,10 @@
 #
 # What this checks, in order:
 #
-#   1. scripts/ci_gate.py — every discovered test. Measured at 28s for 28 files on
-#      the development machine (2026-10-22), so the whole suite fits in a commit
+#   1. scripts/ci_gate.py — every discovered test. Measured at 32s for 28 files on
+#      the development machine (2026-10-22, wall clock, with the malecns corpus
+#      fetched; it moves with which corpora are present, and 39s when all are), so
+#      the whole suite fits in a commit
 #      without the delay that makes people reach for --no-verify.
 #   2. scripts/refs_guard.py --check-commit — changing SKILL.md requires changing
 #      CHANGELOG.md. Only when HEAD exists: it diffs the working tree against HEAD,

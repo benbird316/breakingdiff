@@ -5,6 +5,8 @@ A domain-agnostic N-account claim differential engine. Write one executable clai
 **Usage and rules live in [`SKILL.md`](SKILL.md)** — that is the file an agent reads to decide whether and how to use the tool.
 This file is for **humans**: read it when you want to change the tool, add a new instance, or trace how it came to be.
 
+`MIT` · version `1.0.0` · Python standard library only, no external dependencies.
+
 ---
 
 ## Why it looks like this: the core insight

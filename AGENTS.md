@@ -4,6 +4,11 @@ This file is a map: it answers only "to change X, which file do I read and which
 command do I run" — it does not teach how. [SKILL.md](SKILL.md) is the source of
 truth for rules and usage; this file does not restate it.
 
+**Gate — before you write an assertion, verify one, or hand a batch to another agent, read
+[`ORCHESTRATION.md`](ORCHESTRATION.md) §2.5 and §3.** Those rules bind executors, not only
+dispatchers, and they are the one thing in this repository that cannot be learned by reading
+code. Everything below is navigation.
+
 ## Start here
 
 1. Decide whether the tool fits the task at hand → [SKILL.md](SKILL.md) "when to use, when not to use"
@@ -11,7 +16,7 @@ truth for rules and usage; this file does not restate it.
 3. Before touching decision logic → [SKILL.md](SKILL.md) "mutation evidence" plus [README.md](README.md) "when changing this tool"
 4. Tracing a lesson or an incident end to end → [CHANGELOG.md](CHANGELOG.md)
 5. Not sure what a file is for → [INDEX.md](INDEX.md)
-6. Splitting one batch across several agents, or checking whether a batch's independence really holds → [ORCHESTRATION.md](ORCHESTRATION.md)
+6. About to write an assertion, verify one, or split one batch across agents → [ORCHESTRATION.md](ORCHESTRATION.md) §2.5 and §3 (see the gate above; this is not optional reading for executors)
 
 ## Repository map
 
@@ -21,7 +26,7 @@ truth for rules and usage; this file does not restate it.
 | File navigation | `INDEX.md` | you know you need a file but not where it is |
 | Design rationale and how to run | `README.md` | first time taking over, or wondering why it looks like this |
 | Incident and mutation ledger | `CHANGELOG.md` | checking whether a defense line was ever proven, or tracing a decision |
-| Multi-agent orchestration manual | `ORCHESTRATION.md` | when you are the one dispatching or verifying a batch, not when you are executing inside one |
+| Multi-agent orchestration rules | `ORCHESTRATION.md` | before writing or verifying an assertion, or handing work to another agent — binds executors, not only dispatchers |
 | Six-step method for writing instances | `references/writing-claims.md` | before writing a new Claim |
 | Test alignment | `references/test-alignment.md` | reconciling "assertions vs spec claims" |
 | Receipt field contract | `references/receipt-format.md` | before producing or checking a receipt |

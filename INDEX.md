@@ -84,6 +84,6 @@ Each `*_test.py` is equivalent to the instance it belongs to: break the instance
 | SKILL.md | Rules and usage. An agent reads it on every trigger |
 | VERSION | Single source of truth for the version, one semver line. Both the receipt's version field and version_stamp read from here |
 | README.md | Project positioning, how to run it, design rationale. When a person first encounters the project |
-| ORCHESTRATION.md | Multi-agent orchestration manual. Read by whoever is dispatching work |
+| ORCHESTRATION.md | Multi-agent orchestration rules. Read before writing or verifying an assertion, or splitting a batch — binds executors, not only dispatchers |
 | AGENTS.md | Repository navigation map: to change X, which file to read first and which command to run. When you do not know where to start |
 | CHANGELOG.md | Incident log and mutation ledger. When tracing how a lesson came about |

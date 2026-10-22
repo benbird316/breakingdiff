@@ -1,6 +1,12 @@
 # ORCHESTRATION.md — breakingdiff multi-agent orchestration handbook
 
-> **This file is written for whoever dispatches the batches (a human or an agent), not for the agents executing a batch.**
+> **This file binds every batch run, whether or not you are the one dispatching it.**
+>
+> It is written for whoever splits a batch across agents (a human or an agent) — but §2.5
+> (the verifier must not reuse the producer's predicate), §3 (the independence test) and §10
+> (grade every conclusion) bind **anyone who writes an assertion, verifies one, or hands work to
+> another agent**. If you are executing inside a batch and are about to write your first
+> assertion, §2.5 and §3 are yours, not your dispatcher's.
 >
 > `SKILL.md` answers "how do I use this tool"; `README.md` answers "why does this tool look the way it does".
 > This file answers a third question: **how do you split one convergence batch across multiple agents so that all three sides do not go wrong together.**
