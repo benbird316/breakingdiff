@@ -32,12 +32,17 @@ First public release.
   two tiers of reconciliation, with expectations written before readouts.
 - **Provenance tiers**: `self-attested` / `git-object`, verified through
   verbatim quote matching and line-range comparison.
-- **Entry point narrowed to two demands**: the frontmatter description anchors
-  on confirming that a migration or rewrite did not drift, and on auditing a
-  legal change that raised nothing — the two demands with a user behind them.
-  The engine's domain-agnostic generality and every measured result below are
-  unchanged; only the routing text narrowed, from 1119 characters to 914 (the
-  `skills-ref` limit is 1024, and the longer text would have been rejected).
+- **Entry point narrowed to three demands**: the frontmatter description opens on
+  the moment of use — about to claim that two or more accounts of one artifact
+  agree, on a read-through alone — and names the three demands with a user behind
+  them: confirming a migration or rewrite did not drift, auditing a legal change
+  that raised nothing, and checking an agent's early claim against the artifact it
+  finally lands. The engine's domain-agnostic generality and every measured result
+  below are unchanged; only the routing text moved, from 1119 characters to 958
+  (the `skills-ref` limit is 1024, and the longer text would have been rejected).
+  The agent case is bound to the enumerability requirement on purpose: drift that
+  lives in prose cannot be parameterised, and claiming it could is the one way
+  this description could over-promise.
 
 ### Verification gate
 
