@@ -18,11 +18,22 @@ The real blank spot is on the other side: **the change is legal, raises nothing,
 The key is still there · the type is still int · the tests are still green — but the semantics have quietly changed
 ```
 
-No existing tool covers this kind of drift. Yet its shape is exactly what mechanical enumeration handles:
+**No tool in the set this project was written against catches this kind of drift** — and that set is a premise, not a survey: the tools it sits next to all share one assumption, *change raises an error*, and the set is not enumerated here. If one exists that enumerates the other side, this section is wrong and the tool is unnecessary. Yet the shape is exactly what mechanical enumeration handles:
 compress each of the two materials into one `parameter point → bool` claim, compare point by point,
 and divergence becomes **one specific spot**, not a vague impression that "something is probably inconsistent".
 
 **Divergence ≠ better.** This tool reports only where things differ.
+
+**Agreement ≠ correct either.** Two accounts that agree at every point can both be wrong: a defect
+they share is invisible to a diff. Divergence tells you *where to look*; it does not tell you which
+side is right, and agreement tells you even less — only that this particular comparison found nothing.
+
+**What counts as an account.** One rendition of the same artifact that someone could have shipped:
+a release note, an implementation, an API snapshot, a dataset. Two accounts make a test only when
+they are **independently produced** — if both sides come from the same source, a shared defect
+cancels itself out and the diff reads clean. Whether each side must carry citable provenance is a
+per-instance decision; the rule is P6 (independence) in [`SKILL.md`](SKILL.md), and
+[`references/domain-mapping.md`](references/domain-mapping.md) shows what P6 looks like outside programming.
 
 ---
 
@@ -33,8 +44,9 @@ than a package — modules import each other by bare name, so put `scripts/` on 
 instead of copying a single file out.
 
 Verification needs a little more, in three corners only: `go` and `rustc` for
-`casestudy/port`, `pyarrow` for 7 of `casestudy/malecns`'s 24 assertions, and the corpus for
-every case study. Corpora are never committed — they are fetched on demand and pinned by
+`casestudy/port`, `pyarrow` for 7 of `casestudy/malecns`'s 24 assertions, and a corpus for
+four of the five case studies (`port` needs only the toolchain). Corpora are never committed —
+they are fetched on demand and pinned by
 SHA256 in their manifest, which is why a clone stays under 1MB of code:
 
 | case study | corpus | fetch |
@@ -56,7 +68,7 @@ python scripts/ci_gate.py --only refs     # one file or group, while iterating
 # enable the local gate once per clone — git cannot do this for you
 git config core.hooksPath .githooks && chmod +x .githooks/pre-commit
 
-# the two guards and the version check (repo root; exit 0 is the only pass)
+# the reference gate and the version check (repo root; exit 0 is the only pass)
 python scripts/refs_guard.py           # reference integrity: 0 red, 0 SKIP, 0 warn
 python scripts/version_stamp.py check  # version has one source of truth
 
@@ -74,17 +86,26 @@ directory deeper than its siblings. The same command backs the pre-commit hook a
 GitHub workflow, so a green local run and a green CI run executed the same set of files.
 
 Measured 2026-10-22: 28/28 green in 39s with every corpus present, 20s on a fresh clone
-without them. A case-study test with no corpus takes its no-corpus path instead of failing,
+without them (wall clock, one machine; a partial fetch lands in between — 32s with only
+`malecns` present). A case-study test with no corpus takes its no-corpus path instead of failing,
 which keeps a clone self-sufficient — and means CI cannot vouch for the corpus-anchored
 assertions. Those only run where the corpus was fetched. The limit is stated rather than
 papered over: a green CI badge is not evidence that the case studies still reconcile.
 
-`refs_guard.py` (reference integrity) and `coverage_guard.py` (catalog completeness) are the two guards:
-the first owns the `SKILL.md`→`references` links, orphan reconciliation, pointer form, and pointer-promise fulfilment;
-the second prevents omissions in the `examples` catalog.
+Three guards, three different jobs — they are not interchangeable:
 
-To run one example, **copy `examples/<name>.py` together with its `_test.py` and `data/`** —
-every example is self-contained, and its corpus lives in `examples/data/`.
+| Guard | Owns |
+|---|---|
+| `refs_guard.py` | reference integrity: the `SKILL.md`→`references` links, orphan reconciliation, pointer form, pointer-promise fulfilment |
+| `coverage_guard.py` | whether the surface under test was actually covered — the tier-three defense in ② below |
+| `leak_guard.py` | residue in the files an agent reads: absolute paths, machine names, grading-side material |
+
+`coverage_guard.py` is a library gate invoked from tests (`require_covered`) rather than a command,
+which is why only `refs_guard.py` appears in the block above.
+
+To run one example, run it from the repository root — `python examples/<name>.py` — rather than
+copying it out: `value_type_fingerprint.py` reads shared fixtures from `examples/data/`, and
+`forgery_poc.py` has no paired `_test.py`, so a single copied file reproduces neither.
 
 ---
 
@@ -96,11 +117,11 @@ breakingdiff/
 ├── INDEX.md            ← file navigation: what each file is, when to read it
 ├── CHANGELOG.md        ← evidence: release record, mutation ledger, the failure behind each mechanism
 ├── README.md           ← this file: project positioning and design rationale
-├── ORCHESTRATION.md    ← multi-agent orchestration manual (for whoever dispatches work)
+├── ORCHESTRATION.md    ← multi-agent rules that bind every batch run, not only the dispatcher
 ├── VERSION             ← single source of truth for the version (one-line semver)
 ├── LICENSE             ← MIT
 ├── scripts/            ← verdict, gate, and deployment modules (count per the scripts/ table in INDEX.md) + their mutation-evidence tests
-├── examples/           ← 5 self-contained examples (4 with corpus + the docaudit claims fixture)
+├── examples/           ← runnable examples, the tests that pin them, and the docaudit claims fixture
 ├── casestudy/          ← 5 runnable case studies (pdg / llama / malecns / port / k8s) + 5 teaching docs + README (read on demand; entry point in that directory's README)
 ├── probes/             ← blind-run task sheets: cold-start usability acceptance for context-free agents (assets public, scoring material local)
 └── references/         ← 8 on-demand method docs
@@ -116,7 +137,7 @@ The five formal case studies sit in five different pit layers. Once you hit a ro
 |---|---|---|---|
 | Write an account as claims, unsure how to choose P and Q | data-extraction layer | `casestudy/pdg/` + `TEACHING-pdg.md` | Of the four error modes, only the provenance one is blocked mechanically |
 | Industrial evidence does not line up (release notes vs artifact), or the corpus is still missing | probe layer + ledger layer | `casestudy/llama/` + `TEACHING-llama.md` | The degenerate readout is **all zeros**, quieter than the data-extraction layer |
-| Assertions keep going red although the data is fine | strength layer | `casestudy/malecns/` + `TEACHING-malecns.md` | Same data: bounded bands flag 12 points, point-value claims 2,720; a 45.6M-synapse public connectome |
+| Assertions keep going red although the data is fine | strength layer | `casestudy/malecns/` + `TEACHING-malecns.md` | Same data: bounded bands flag 12 points, point-value claims 2,720 — both are this tool's readout on a sampled grid, not bounds of the space; a 45.6M-synapse public connectome |
 | Rewrite an implementation (Python→Rust/Go) and confirm behavior did not drift | port layer | `casestudy/port/` + `TEACHING-port.md` | `claims.json` is read by all three implementations; a wrong port's offset is predictable |
 | Audit a cross-version API change and need to know what a client will stop being able to call | scope layer + quadrant reading | `casestudy/k8s/` + `TEACHING-k8s.md` | On an existence baseline the removals land in **divergence**; a criterion the domain cannot support is refused by the gate instead of reported as zero |
 
@@ -246,3 +267,8 @@ MIT (see [`LICENSE`](LICENSE)). Version `1.0.0` (single source of truth = the ro
 checked by `scripts/version_stamp.py check`).
 
 Released tool; the core has no external dependencies and uses only the standard library.
+
+**Where to ask.** This release has no issue tracker configured — it ships as an archive, so a
+question arrives as a diff plus the gate output. If you are taking the project over, read
+[`CHANGELOG.md`](CHANGELOG.md) first: it records which defense line was ever proven and which was
+only written down.
