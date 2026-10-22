@@ -1,0 +1,66 @@
+#!/bin/sh
+# The local gate. Git runs this on every `git commit` once it is enabled.
+#
+# Why it lives in .githooks/ instead of .git/hooks/: .git/hooks/ is not versioned,
+# so the hook would be invisible to review, absent from every clone, and impossible
+# to test. Keeping it in the tree means the gate itself is diffed, reviewed, and
+# covered by hooks_contract_test.py like any other decision logic.
+#
+# Enable (once per clone — git cannot do this automatically):
+#
+#     git config core.hooksPath .githooks
+#     chmod +x .githooks/pre-commit     # POSIX; on Windows git ignores the mode
+#
+# What this checks, in order:
+#
+#   1. scripts/ci_gate.py — every discovered test. Measured at 28s for 28 files on
+#      the development machine (2026-10-22), so the whole suite fits in a commit
+#      without the delay that makes people reach for --no-verify.
+#   2. scripts/refs_guard.py --check-commit — changing SKILL.md requires changing
+#      CHANGELOG.md. Only when HEAD exists: it diffs the working tree against HEAD,
+#      and the first commit of a fresh repository has no previous state to guard.
+#      "No previous state" is not an exemption, it is the correct reading.
+#
+# Known limit, stated instead of hidden: this runs against the WORKING TREE, not
+# the staged subset. With a partially staged commit the tests describe the tree,
+# not exactly what will be committed. Stashing the unstaged part to fix that would
+# reach into the user's working tree mid-commit, which is a worse failure mode than
+# the one it cures. Stage everything, or commit in coherent units.
+#
+# Exit tiers match receipt.py: 1 = the gate is red, 2 = the gate did not run.
+
+set -u
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "[pre-commit] runtime error: not inside a git work tree" >&2
+    exit 2
+}
+cd "$root" || exit 2
+
+if ! command -v python >/dev/null 2>&1; then
+    echo "[pre-commit] runtime error: python is not on PATH, so the gate cannot run." >&2
+    echo "[pre-commit] A gate that did not run is not a gate that passed." >&2
+    exit 2
+fi
+
+echo "[pre-commit] running the full gate (scripts/ci_gate.py)"
+python scripts/ci_gate.py
+code=$?
+if [ "$code" -ne 0 ]; then
+    echo "" >&2
+    echo "[pre-commit] blocked: the gate is red (exit $code)." >&2
+    echo "[pre-commit] --no-verify skips this check. Do not use it to get past a red" >&2
+    echo "[pre-commit] gate: if the gate itself is wrong, fix the gate in its own commit." >&2
+    exit "$code"
+fi
+
+if git rev-parse --verify -q HEAD >/dev/null; then
+    python scripts/refs_guard.py --check-commit
+    code=$?
+    if [ "$code" -ne 0 ]; then
+        echo "[pre-commit] blocked by refs_guard --check-commit (exit $code)" >&2
+        exit "$code"
+    fi
+fi
+
+exit 0

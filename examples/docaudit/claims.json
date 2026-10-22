@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "about": "Promise-vs-behavior fixture from a blind-test probe experiment (v1). Four agent-produced CLI tools were probed by four context-free blind testers that read only each README. Every defect found was a README promise not upheld by behavior; three high-severity ones were silent. This fixture exists to test detection logic, not to benchmark models: n=1 per cell and the blind testers shared a model family with the producers, so treat it as a regression fixture, not a capability score.",
+  "source": {
+    "experiment": "reference-graph blind-run probe v1 (2026-10-11)",
+    "criterion": "three tiers (A usable / B needs probing / C unusable) plus four mechanical metrics; fixed before results, not tuned afterwards",
+    "caveats": [
+      "one run per cell: tier distribution, not a rate",
+      "blind testers and producers used the same model family: shared blind spots possible",
+      "CLI tools only; library/service outputs need another criterion"
+    ]
+  },
+  "artifacts": {
+    "01": {
+      "tier": "A",
+      "required_params": 1,
+      "first_screen_runnable": true,
+      "explicit_unverified_statements": 10,
+      "bundled_samples": 0
+    },
+    "02": {
+      "tier": "A",
+      "required_params": 0,
+      "first_screen_runnable": true,
+      "explicit_unverified_statements": 13,
+      "bundled_samples": 0
+    },
+    "03": {
+      "tier": "A",
+      "required_params": 1,
+      "first_screen_runnable": true,
+      "explicit_unverified_statements": 4,
+      "bundled_samples": 0
+    },
+    "04": {
+      "tier": "B",
+      "required_params": 1,
+      "first_screen_runnable": true,
+      "explicit_unverified_statements": 8,
+      "bundled_samples": 0
+    }
+  },
+  "defects": [
+    {
+      "id": "01-js-exact",
+      "artifact": "01",
+      "class": "doc-vs-behavior",
+      "severity": "high",
+      "silent": false,
+      "promise": "Every unsupported language is labelled heuristic and never disguised as exact",
+      "measured": "JS edges are labelled exact",
+      "evidence": "README core selling point vs probe readout"
+    },
+    {
+      "id": "01-c-include-silent",
+      "artifact": "01",
+      "class": "doc-vs-behavior",
+      "severity": "high",
+      "silent": true,
+      "promise": "C/C++ #include is supported",
+      "measured": "the in-repo b.h is indexed but has zero edges and zero unresolved entries; exit code 0",
+      "evidence": "probe ran the bundled fixture"
+    },
+    {
+      "id": "02-excluded-files",
+      "artifact": "02",
+      "class": "doc-vs-behavior",
+      "severity": "medium",
+      "silent": false,
+      "promise": "Excluded files never appear in files[]; only a total is reported",
+      "measured": "inconsistent: unsupported languages are listed one by one, data files only totalled",
+      "evidence": "probe compared two exclusion paths"
+    },
+    {
+      "id": "02-pyi-stub",
+      "artifact": "02",
+      "class": "doc-vs-behavior",
+      "severity": "low",
+      "silent": false,
+      "promise": "Stubs other than .pyi are not parsed",
+      "measured": "ambiguous wording; .pyi files are in fact parsed",
+      "evidence": "probe tried a .pyi input"
+    },
+    {
+      "id": "03-errors-silent",
+      "artifact": "03",
+      "class": "doc-vs-behavior",
+      "severity": "high",
+      "silent": true,
+      "promise": "Failures are collected, not raised; they appear in errors[] and on stderr",
+      "measured": "with a broken file in analyze: stderr empty, errors[] empty, exit code 0",
+      "evidence": "probe fed a broken input"
+    },
+    {
+      "id": "03-stdin-formats",
+      "artifact": "03",
+      "class": "doc-vs-behavior",
+      "severity": "medium",
+      "silent": false,
+      "promise": "stdin pipe reads any of the supported formats",
+      "measured": "only md/html work via stdin; CSV/INI raise, while the example implies arbitrary formats",
+      "evidence": "probe piped several formats"
+    },
+    {
+      "id": "04-cjk-figure-refs",
+      "artifact": "04",
+      "class": "doc-vs-behavior",
+      "severity": "high",
+      "silent": false,
+      "promise": "Chinese figure/table references (figure 1, table 2) are covered",
+      "measured": "zero hits on 'figure 1 shows' / 'table 2 shows data' (the rule requires a non-CJK character on the right)",
+      "evidence": "probe fed natural Chinese sentences"
+    },
+    {
+      "id": "04-appendix-target",
+      "artifact": "04",
+      "class": "doc-vs-behavior",
+      "severity": "medium",
+      "silent": false,
+      "promise": "The target-type table lists appendix:B",
+      "measured": "'see appendix A' gets zero hits: documented but not implemented",
+      "evidence": "probe tried the documented form"
+    },
+    {
+      "id": "04-spec-contradiction",
+      "artifact": "04",
+      "class": "doc-vs-behavior",
+      "severity": "medium",
+      "silent": false,
+      "promise": "One definition of structural reference for Chinese figure/table pointers",
+      "measured": "two sections of the README disagree on the same definition",
+      "evidence": "probe cross-read sections 3 and 4"
+    },
+    {
+      "id": "04-csv-greedy",
+      "artifact": "04",
+      "class": "code-defect",
+      "severity": "high",
+      "silent": false,
+      "promise": "CSV columns are parsed correctly",
+      "measured": "URL matching is greedy and swallows the next column (https://a.io/1,12)",
+      "evidence": "probe's CSV case"
+    },
+    {
+      "id": "04-md-bibliography-silent",
+      "artifact": "04",
+      "class": "code-defect",
+      "severity": "high",
+      "silent": true,
+      "promise": "The same content analysed as .txt or .md yields the same bibliography count",
+      "measured": "renaming .txt to .md drops the bibliography from 5 entries to 0 with no warning",
+      "evidence": "probe analysed identical content twice"
+    }
+  ],
+  "expected_summary": {
+    "defects_total": 11,
+    "doc_vs_behavior": 9,
+    "code_defects": 2,
+    "high_severity": 6,
+    "silent_high_severity": 3,
+    "tier_counts": {
+      "A": 3,
+      "B": 1,
+      "C": 0
+    }
+  }
+}

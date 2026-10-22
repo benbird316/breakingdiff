@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "domain": [
+    {"n": 0}, {"n": 1}, {"n": 2}, {"n": 3}, {"n": 4}, {"n": 5},
+    {"n": 6}, {"n": 7}, {"n": 8}, {"n": 9}, {"n": 10}, {"n": 11},
+    {"n": 12}, {"n": 13}, {"n": 14}, {"n": 15}, {"n": 16}, {"n": 17},
+    {"n": 18}, {"n": 19}, {"n": 20}, {"n": 21}, {"n": 22}, {"n": 23},
+    {"n": 24}
+  ],
+  "pairs": [
+    {
+      "id": "band-vs-ge",
+      "P": {
+        "name": "P: n >= 12",
+        "applies": {"op": "always"},
+        "predicate": {"op": "ge", "field": "n", "value": 12},
+        "source": "casestudy/port/claims.json#band-vs-ge.P",
+        "quote": "P: n >= 12",
+        "source_tests": [
+          {"point": {"n": 11}, "expected": false},
+          {"point": {"n": 12}, "expected": true}
+        ]
+      },
+      "Q": {
+        "name": "Q: 10 <= n < 20",
+        "applies": {"op": "band", "field": "n", "lo": 0, "hi": 24},
+        "predicate": {"op": "band", "field": "n", "lo": 10, "hi": 20},
+        "source": "casestudy/port/claims.json#band-vs-ge.Q",
+        "quote": "Q: 10 <= n < 20",
+        "source_tests": [
+          {"point": {"n": 9}, "expected": false},
+          {"point": {"n": 10}, "expected": true},
+          {"point": {"n": 20}, "expected": false}
+        ]
+      },
+      "expect": {
+        "common": 8,
+        "divergence": 4,
+        "dominance": 2,
+        "neither": 10,
+        "out_of_domain": 1,
+        "verdict": "parallel",
+        "divergence_witness": [20, 21, 22, 23],
+        "dominance_witness": [10, 11]
+      }
+    },
+    {
+      "id": "equivalent",
+      "P": {
+        "name": "P: n >= 12",
+        "applies": {"op": "always"},
+        "predicate": {"op": "ge", "field": "n", "value": 12},
+        "source": "casestudy/port/claims.json#equivalent.P",
+        "quote": "P: n >= 12",
+        "source_tests": [
+          {"point": {"n": 12}, "expected": true},
+          {"point": {"n": 11}, "expected": false}
+        ]
+      },
+      "Q": {
+        "name": "Q: n > 11",
+        "applies": {"op": "always"},
+        "predicate": {"op": "gt", "field": "n", "value": 11},
+        "source": "casestudy/port/claims.json#equivalent.Q",
+        "quote": "Q: n > 11",
+        "source_tests": [
+          {"point": {"n": 12}, "expected": true},
+          {"point": {"n": 11}, "expected": false}
+        ]
+      },
+      "expect": {
+        "common": 13,
+        "divergence": 0,
+        "dominance": 0,
+        "neither": 12,
+        "out_of_domain": 0,
+        "verdict": "equivalent",
+        "divergence_witness": [],
+        "dominance_witness": []
+      }
+    },
+    {
+      "id": "strict-contains",
+      "P": {
+        "name": "P: n >= 12",
+        "applies": {"op": "always"},
+        "predicate": {"op": "ge", "field": "n", "value": 12},
+        "source": "casestudy/port/claims.json#strict-contains.P",
+        "quote": "P: n >= 12",
+        "source_tests": [
+          {"point": {"n": 12}, "expected": true},
+          {"point": {"n": 11}, "expected": false}
+        ]
+      },
+      "Q": {
+        "name": "Q: n >= 15",
+        "applies": {"op": "always"},
+        "predicate": {"op": "ge", "field": "n", "value": 15},
+        "source": "casestudy/port/claims.json#strict-contains.Q",
+        "quote": "Q: n >= 15",
+        "source_tests": [
+          {"point": {"n": 14}, "expected": false},
+          {"point": {"n": 15}, "expected": true}
+        ]
+      },
+      "expect": {
+        "common": 10,
+        "divergence": 3,
+        "dominance": 0,
+        "neither": 12,
+        "out_of_domain": 0,
+        "verdict": "p_strict_contains_q",
+        "divergence_witness": [12, 13, 14],
+        "dominance_witness": []
+      }
+    }
+  ]
+}

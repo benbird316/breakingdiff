@@ -1,0 +1,24 @@
+# Verification dependencies — not library dependencies.
+#
+# The library itself (scripts/*.py, examples/*.py) is pure standard library. It
+# imports and runs with nothing installed. This file exists for the verification
+# surface, and it has exactly one entry because the surface touches exactly one
+# third-party package.
+#
+# pyarrow is used in one place: casestudy/malecns/test_aligned.py reads the
+# annotation Feather table directly, so that the anchors are recomputed by a path
+# independent of the implementation under test. Two readers exist, so each one is
+# the other's reconciliation.
+#
+# Why it is a hard requirement rather than an optional extra: when the corpus is
+# present but pyarrow is absent, the test raises a runtime error instead of
+# skipping. That is deliberate — a check that reports "nothing to verify" because
+# a tool is missing is the three-level silence this repository keeps closing. CI
+# installs this file so the reading path stays warm; the corpus is gitignored, so
+# on a fresh checkout those assertions take their no-corpus path regardless.
+#
+# Version anchor: 25.0.1 is what the readings recorded in casestudy/malecns/
+# aligned.py were taken with; 26.0.0 ran the full gate green on 2026-10-22. The
+# range keeps CI on a version someone actually measured instead of whatever pip
+# resolves on the day.
+pyarrow>=25,<27

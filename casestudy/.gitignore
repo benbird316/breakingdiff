@@ -1,0 +1,32 @@
+# 第三方语料不进 git，用 fetch 脚本现场获取。
+
+# PDG sqlite：约 7.6MB，官方有稳定URL
+*.sqlite
+
+# llama.cpp 官方构建：解压后共约 2.1GB
+# —— 绝不能进 git。资产名固定在 llama/corpus_manifest.json 的 asset_pins 里，
+#    由 llama/fetch_corpus.py 下载解压。
+llama/llama-b*/
+llama/downloads/
+*.zip
+
+# ★ 注意：llama/corpus_manifest.json **要**进 git。
+#   它记的是产物侧实测事实（有什么、多大、探针读到什么），
+#   即使没有语料，读者也能核对读数一致性。
+#   它不能替代重跑探针 —— 所以 fetch_corpus.py 必须一起进。
+
+# port/ 两个移植的编译产物：现场用 rustc 生成，不进 git
+*.exe
+*.pdb
+port/impl_rust/port_rust
+
+# malecns 两份 feather：56MB，GCS 直链现场取，SHA256 锚在 test_aligned.py
+malecns/*.feather
+
+# k8s 两份官方 OpenAPI 快照：6.2MB，jsDelivr/镜像现场取，
+# SHA256 锚在 k8s/fetch_data.py 的 ASSETS 里（并由 test_aligned.py 复核）。
+k8s/k8s-*.json
+
+# ★ 注意：k8s/corpus_manifest.json **要**进 git（同 llama/malecns 的理由）——
+#   记的是语料侧的实测事实（哈希、大小、镜像是谁、哪条路径已经坏了）。
+#   它不能替代重跑 aligned.py —— 所以 fetch_data.py 必须一起进。

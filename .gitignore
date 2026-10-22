@@ -1,0 +1,10 @@
+# Generic tool output (platform-independent)
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Blind-run organizer material (grading table / run notes / the ledger behind them —
+# publishing them ends any future blind run, so they stay out of version control;
+# the task sheet itself is an asset and stays public)
+probes/**/_grader_local/

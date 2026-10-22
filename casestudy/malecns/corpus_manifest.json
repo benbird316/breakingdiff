@@ -1,0 +1,39 @@
+{
+  "_about": "malecns corpus ledger: measured anchors for the two feathers + the aggregate readout table. The raw corpus does not enter the repository (.gitignore); this file is its in-repo stand-in.",
+  "_why_this_file_exists": "the readout table must let someone without the corpus check consistency, but checking consistency is not verification — re-running the probes still needs a re-download.",
+  "_generated_by": "fetch_corpus.py (rescans the corpus on disk and overwrites this file)",
+  "corpus_status": {
+    "_about": "An honest record of the corpus state. The case's readout was measured in this state.",
+    "state": "COMPLETE",
+    "missing": [],
+    "impact": "when the corpus is missing, every corpus-derived readout (domain facts, three bands, three error modes) cannot be recomputed and only the readings anchor can be reconciled against; whichever feather is missing, that side's (annotation/transmitter) accounts fail as a whole",
+    "how": "python fetch_corpus.py (GCS direct link, resumable; anchors in PINS)"
+  },
+  "files": {
+    "body-annotations-male-cns-v0.9-minconf-0.5.feather": {
+      "sha256": "03cca8d1e667353f75f7674fb7d6b3a9e22e5b04b089865127407a5c38816cda",
+      "bytes": 12900778,
+      "rows": 211743
+    },
+    "body-neurotransmitters-male-cns-v0.9.feather": {
+      "sha256": "93f436ed5ac29787c485907ba1aa2ca85213929a485466c46da034cd676fbbeb",
+      "bytes": 43403618,
+      "rows": 1836293
+    }
+  },
+  "readings": {
+    "domain_size": 22176,
+    "types": 11235,
+    "one_sided_types": 294,
+    "asym_two_sided_types": 2030,
+    "wrong1_fail": 2720,
+    "wrong2_fail": 4354,
+    "wrong3_fail": 241,
+    "vote_vs_celltype_types": 138,
+    "vote_share_subhalf_types": 16,
+    "max_asym_type": "KCab-s",
+    "max_asym_left": 234,
+    "max_asym_right": 423,
+    "max_asym": 189
+  }
+}

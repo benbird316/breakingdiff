@@ -1,0 +1,108 @@
+{
+  "_about": "Artifact-side ledger: what each build 'contains, how big it is, what the probes read'. Pairs with official_ledger.json (the official-account side).",
+  "_why_this_file_exists": "This case's corpus is 713 MB × 3 = 2.1 GB of official binaries; it cannot go into git and cannot be distributed with the repository. So the **measured artifact-side facts** are pinned here: even a reader without the corpus can check 'the readout I see matches what you recorded'.",
+  "_honesty_boundary": "★ This file is a **measured record**, not the evidence itself. It lets a reader check readout consistency, but **it cannot replace re-running the probes** — only a run against the real binaries counts as verification. That is why fetch_corpus.py has to exist: if you can re-download, do not trust this ledger alone.",
+  "_generated_by": "fetch_corpus.py --manifest (rescans the real builds and overwrites this file)",
+  "_platform_observed": "Windows x64, CUDA 13 (inferred from cublas64_13.dll / ggml-cuda.dll inside the artifact, not stated in any document)",
+
+  "asset_pins": {
+    "_about": "Official release asset names. ★ Measured: b10472/b10595 are cuda-13.3, b11681 is cuda-13.4 — **the minor version differs within the same 'CUDA 13' family**; do not write a vague 'CUDA 13'.",
+    "_api": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/<tag>",
+    "_download_pattern": "https://github.com/ggml-org/llama.cpp/releases/download/<tag>/<asset>",
+    "b10472": {
+      "published_at": "2026-08-17T17:16:25Z",
+      "used_asset": "llama-b10472-bin-win-cuda-13.3-x64.zip",
+      "used_asset_size_mb": 147,
+      "alternatives": {
+        "cpu": "llama-b10472-bin-win-cpu-x64.zip (18MB)",
+        "cuda-12.4": "llama-b10472-bin-win-cuda-12.4-x64.zip (251MB)"
+      }
+    },
+    "b10595": {
+      "published_at": "2026-08-23T13:44:15Z",
+      "used_asset": "llama-b10595-bin-win-cuda-13.3-x64.zip",
+      "used_asset_size_mb": 146,
+      "alternatives": {
+        "cpu": "llama-b10595-bin-win-cpu-x64.zip (18MB)",
+        "cuda-12.4": "llama-b10595-bin-win-cuda-12.4-x64.zip (251MB)"
+      }
+    },
+    "b11681": {
+      "published_at": "2026-10-16T05:47:38Z",
+      "used_asset": "llama-b11681-bin-win-cuda-13.4-x64.zip",
+      "used_asset_size_mb": 155,
+      "alternatives": {
+        "cpu": "llama-b11681-bin-win-cpu-x64.zip (20MB)",
+        "cuda-12.4": "llama-b11681-bin-win-cuda-12.4-x64.zip (267MB)"
+      }
+    }
+  },
+
+  "corpus_status": {
+    "_about": "★ An honest record of the corpus state. The case's readout was measured in the state below.",
+    "recorded_at": "2026-10-16T16:51+08:00",
+    "state": "PARTIAL",
+    "present": ["b11681"],
+    "missing": ["b10472", "b10595"],
+    "reason": "the two older builds were deleted after the verification run passed",
+    "impact": "★ **the cross-version conclusion cannot be re-run**. The disappearance of template-analysis is a cross-version comparison (present in b10472/b10595 → absent in b11681); with only after and no before, the `C3` account loses its comparison object.",
+    "recoverable": true,
+    "how": "python fetch_corpus.py (re-download from the official release, see asset_pins)",
+    "_why_record_this": "A discipline of this project: **a missing corpus must be recorded, not worked around**. This entry is itself teaching material for the case — it shows what to leave behind when 'the build is gone'. Without it, later readers would assume all three builds were always there, and when a re-run produces no conclusion they would not know what to blame."
+  },
+
+  "builds": {
+    "b10472": {
+      "sha": "60eeeb6082c1126bb8bc72902c83123cd056811b",
+      "sha_self_reported": "60eeeb608",
+      "on_disk": false,
+      "probes": {
+        "C1_server_has_SLOTS_N_DIFF": {"value": false, "note": "the official statement introduced it only in b10595; a build earlier than that should not have it"},
+        "C2_mellum_present": {"value": true, "note": "1 matching file"},
+        "C3_template_analysis_present": {"value": true, "note": "present"}
+      },
+      "verdict_vector": {"C1": false, "C2": true, "C3": true}
+    },
+    "b10595": {
+      "sha": "e8eed4525aaca00a78d8f837dce90dd4d4708133",
+      "sha_self_reported": null,
+      "on_disk": false,
+      "probes": {
+        "C1_server_has_SLOTS_N_DIFF": {"value": true, "note": "2 matches"},
+        "C2_mellum_present": {"value": true, "note": "1 matching file"},
+        "C3_template_analysis_present": {"value": true, "note": "present"}
+      },
+      "verdict_vector": {"C1": true, "C2": true, "C3": true}
+    },
+    "b11681": {
+      "sha": "5e03a1ff450cae37a774684de55d14fb48b1f90b",
+      "sha_self_reported": "5e03a1ff",
+      "on_disk": true,
+      "key_file_sizes": {
+        "_about": "★ Sizes are recorded to pin the 'stub vs impl' trap: llama-server.exe is a 9216-byte shell, the real code is in llama-server-impl.dll (9259520 bytes), a factor of 1000. Checking the wrong file gives an all-False false readout.",
+        "llama-server.exe": 9216,
+        "llama-server-impl.dll": 9259520
+      },
+      "probes": {
+        "C1_server_has_SLOTS_N_DIFF": {"value": true, "note": "2 matches"},
+        "C2_mellum_present": {"value": true, "note": "1 matching file"},
+        "C3_template_analysis_present": {"value": false, "note": "★ missing — the core finding of this case"}
+      },
+      "verdict_vector": {"C1": true, "C2": true, "C3": false},
+      "sibling_stub_sizes": {
+        "_note": "The other exes in the same directory are also 9216-byte stubs, recorded together to show this is a systematic structure, not an isolated case",
+        "llama-cli.exe": 9216,
+        "llama-bench.exe": 9216,
+        "llama-batched-bench.exe": 9216
+      }
+    }
+  },
+
+  "core_finding": {
+    "_statement": "llama-template-analysis.exe was removed in b11681, and the official release notes for the three versions say not one word about it.",
+    "_evidence": "present in b10472/b10595 → missing in b11681; the body_details_verbatim of all three versions in official_ledger.json mentions only 'additions', with no removal record at all.",
+    "_engine_reading": "C3 is judged an outlier (1/3 = 33.3%), and triggers 2 cross-version ratchet violations, all at b11681.",
+    "_caveat": "Removal is not necessarily bad (it may be a deliberate cleanup). That it **went unannounced** is a fact; **the removal itself** is another matter — the two must be stated separately.",
+    "_requires_rebuild_to_reverify": true
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "_about": "官方 release notes 逐字原文台账。Q 口径只能来自这里，不得由本case study 概括或改写。",
+  "_source": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/<tag>",
+  "_fetched_at": "2026-10-16T15:58+08:00",
+  "_anchor": "产物自报的 commit 与本台账 sha 逐字一致，故 sha 为外部锚（非自证）。",
+
+  "releases": [
+    {
+      "tag": "b10472",
+      "sha": "60eeeb6082c1126bb8bc72902c83123cd056811b",
+      "sha_self_reported": "60eeeb608",
+      "published_at": "2026-08-17T17:16:25Z",
+      "author": "github-actions[bot]",
+      "body_note": "官方 body 的 <details open> 段（唯一有语义变更的部分，逐字）：",
+      "body_details_verbatim": "cuda : skip UMA override for HIP builds (#27083)\n\nAMD APUs report accurate memory via hipMemGetInfo. Using\nMemAvailable over-promises on small-carveout systems.\n\nfixes #18159",
+      "claims_verbatim": [
+        "cuda : skip UMA override for HIP builds (#27083)",
+        "AMD APUs report accurate memory via hipMemGetInfo. Using",
+        "MemAvailable over-promises on small-carveout systems.",
+        "fixes #18159"
+      ]
+    },
+    {
+      "tag": "b10595",
+      "sha": "e8eed4525aaca00a78d8f837dce90dd4d4708133",
+      "sha_self_reported": "e8eed4525",
+      "published_at": "2026-08-23T13:44:15Z",
+      "author": "github-actions[bot]",
+      "body_note": "官方 body 的 <details open> 段（逐字）：",
+      "body_details_verbatim": "server : add LLAMA_SERVER_SLOTS_N_DIFF (#27600)",
+      "claims_verbatim": [
+        "server : add LLAMA_SERVER_SLOTS_N_DIFF (#27600)"
+      ]
+    },
+    {
+      "tag": "b11681",
+      "sha": "5e03a1ff450cae37a774684de55d14fb48b1f90b",
+      "sha_self_reported": "5e03a1ff4",
+      "published_at": "2026-10-16T05:47:38Z",
+      "author": "github-actions[bot]",
+      "body_note": "官方 body 的 <details open> 段（逐字）：",
+      "body_details_verbatim": "graph : add precision handling for MELLUM architecture (#30584)",
+      "claims_verbatim": [
+        "graph : add precision handling for MELLUM architecture (#30584)"
+      ]
+    }
+  ],
+
+  "_release_policy_verbatim": {
+    "source": "https://github.com/ggml-org/llama.cpp/blob/master/docs/release.md",
+    "quote": "Currently releases are not published to github releases, only nightly/development builds are available there.",
+    "note": "即 bXXXXX 全部是 nightly/development build，官方明确声明它们不是正式 release。这一点决定了本case study 的性质：不是验「正式发布说明对不对」，而是验「nightly 公告的承诺与实际产物是否对得上」。"
+  }
+}

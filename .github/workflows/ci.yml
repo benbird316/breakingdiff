@@ -1,0 +1,59 @@
+# The gate GitHub runs on every push. It calls scripts/ci_gate.py and nothing else.
+#
+# Why the test list is not written here: a list in the workflow and a list in the
+# local pre-commit hook would drift, and the drift is silent — a new test gets
+# added, this file never learns about it, and the workflow stays green over a
+# surface that keeps shrinking. ci_gate.py discovers by naming convention, so a
+# new test_*.py is covered by both sides the moment it lands.
+name: gate
+
+on:
+  push:
+  pull_request:
+
+# Read-only: the gate proves things, it never writes back to the repository.
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: ci_gate (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # Do not cancel siblings on the first failure: one red version is not a
+      # reason to hide what the other version would have said.
+      fail-fast: false
+      matrix:
+        # 3.13 is what the readings were taken with. Widening this matrix is a
+        # claim about support, so it stays one entry until someone measures more.
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install verification dependencies
+        # pyarrow only. The library is pure standard library; the corpora are
+        # gitignored and are not fetched here (see the note below).
+        run: python -m pip install -r requirements.txt
+
+      - name: Record the toolchain the run actually used
+        # Printed so a reader can tell "reconciled on this go/rustc" from
+        # "skipped because the tool was absent" without downloading the log twice.
+        run: |
+          python --version
+          python -c "import pyarrow; print('pyarrow', pyarrow.__version__)"
+          go version || echo "go: absent"
+          rustc --version || echo "rustc: absent"
+
+      - name: Run the gate
+        # Covers the code-level surface. The corpus-anchored assertions in
+        # casestudy/*/ take their no-corpus path on a fresh checkout — a green
+        # run here is not evidence that the case studies still reconcile against
+        # their data. That limit is documented in scripts/ci_gate.py and README.
+        run: python scripts/ci_gate.py

@@ -1,0 +1,51 @@
+{
+  "_about": "Artifact-side ledger for the two Kubernetes OpenAPI snapshots. Companion to the case's teaching file.",
+  "_honesty_boundary": "This file is a measured record, not the evidence. It lets a reader check that the readout they see matches what was recorded; it cannot replace re-running aligned.py. If you can re-fetch, re-fetch.",
+  "_generated_by": "fetch_data.py --manifest",
+  "asset_pins": {
+    "k8s-1.28.json": {
+      "sha256": "44ff3c98bb011964585019e1765b0c09ee65d503e4c35cbda355df6a02486c86",
+      "size_bytes": 2955128,
+      "mirrors_tried_in_order": [
+        "jsdelivr",
+        "github-raw"
+      ]
+    },
+    "k8s-1.31.json": {
+      "sha256": "ddcb3d5c3d85849f1fadb56387d3a7bf44712da291e5bd08b34df4e8a4247f8d",
+      "size_bytes": 3277085,
+      "mirrors_tried_in_order": [
+        "jsdelivr",
+        "github-raw",
+        "statically"
+      ]
+    }
+  },
+  "corpus_status": {
+    "state": "PRESENT",
+    "present": [
+      "k8s-1.28.json",
+      "k8s-1.31.json"
+    ],
+    "missing": [],
+    "impact": "Both snapshots present and hash-verified; the four-quadrant readout in TEACHING-k8s.md can be re-run as written.",
+    "recoverable": true,
+    "how": "python fetch_data.py (SHA256-pinned; see the 403 note below)",
+    "known_broken_path": "jsDelivr returns **HTTP 403 for release-1.31** ('Package size exceeded the configured limit of 50 MB') while release-1.28 succeeds from cache. This is a CDN package-size policy, not an outage, and the 403 body points at a GitHub **HTML tree page** — following it verbatim saves HTML into a .json slot. The SHA256 check is what catches that.",
+    "_why_record_this": "Same discipline as llama's missing builds: a corpus problem must be recorded, not worked around — and it must name **which conclusion dies**, not merely that data is gone."
+  },
+  "files": {
+    "k8s-1.28.json": {
+      "sha256": "44ff3c98bb011964585019e1765b0c09ee65d503e4c35cbda355df6a02486c86",
+      "size_bytes": 2955128,
+      "on_disk": true,
+      "sha256_reverified": true
+    },
+    "k8s-1.31.json": {
+      "sha256": "ddcb3d5c3d85849f1fadb56387d3a7bf44712da291e5bd08b34df4e8a4247f8d",
+      "size_bytes": 3277085,
+      "on_disk": true,
+      "sha256_reverified": true
+    }
+  }
+}

@@ -1,0 +1,38 @@
+# Repository-wide normalization: LF in the index and in every working tree.
+#
+# Why this is not cosmetic. Several tests compare output byte for byte —
+# casestudy/port/test_port.py (field fingerprints across three implementations),
+# examples/value_type_fingerprint_test.py, and the fingerprints scripts/leak_guard.py
+# matches against. Without this file the EOL of a checkout is decided by each
+# clone's core.autocrlf setting, so the same commit yields CRLF on a Windows
+# working tree and LF on the Linux CI runner. A green local run would then turn
+# red in CI with no code change, and the first suspect would be the code.
+#
+# Measured 2026-10-22 before this file existed: index all LF across 92 files,
+# working tree 19 CRLF / 71 LF / 1 mixed, core.autocrlf=true. The suite happened
+# to be EOL-insensitive at that moment (26/26 passed on a force-LF copy), so this
+# is a guard against the next byte-exact test, not a fix for a present failure.
+# Stating which one it is matters: a guard nobody can tell apart from a fix gets
+# removed the moment the "bug" does not reproduce.
+* text=auto eol=lf
+
+# Binary payloads and fetched corpora degrade under EOL translation and must not
+# be text-diffed. The corpora themselves are gitignored (casestudy/.gitignore);
+# these patterns cover anything a contributor drops in locally.
+*.feather binary
+*.arrow   binary
+*.ipc     binary
+*.parquet binary
+*.sqlite  binary
+*.zip     binary
+*.gz      binary
+*.pdb     binary
+*.exe     binary
+*.png     binary
+*.jpg     binary
+*.ico     binary
+
+# VERSION carries no trailing newline on purpose (version_stamp.py compares it
+# against the stamped copies). Marking it -text keeps any future tooling from
+# "helpfully" normalizing a file whose byte count is part of the contract.
+VERSION -text
