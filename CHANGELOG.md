@@ -32,6 +32,12 @@ First public release.
   two tiers of reconciliation, with expectations written before readouts.
 - **Provenance tiers**: `self-attested` / `git-object`, verified through
   verbatim quote matching and line-range comparison.
+- **Entry point narrowed to two demands**: the frontmatter description anchors
+  on confirming that a migration or rewrite did not drift, and on auditing a
+  legal change that raised nothing — the two demands with a user behind them.
+  The engine's domain-agnostic generality and every measured result below are
+  unchanged; only the routing text narrowed, from 1119 characters to 914 (the
+  `skills-ref` limit is 1024, and the longer text would have been rejected).
 
 ### Verification gate
 

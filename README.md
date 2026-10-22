@@ -2,6 +2,8 @@
 
 A domain-agnostic N-account claim differential engine. Write one executable claim for each of two (or more) accounts of the same artifact, mechanically compute their verdict vector at every parameter point, and report only divergence — it does not adjudicate right or wrong.
 
+Two uses carry the demand: **confirming that a port or rewrite did not drift**, and **auditing a legal change that raised no error**. The mechanism is domain-agnostic because nothing inside it knows about code; those two are simply where someone is stuck.
+
 **Usage and rules live in [`SKILL.md`](SKILL.md)** — that is the file an agent reads to decide whether and how to use the tool.
 This file is for **humans**: read it when you want to change the tool, add a new instance, or trace how it came to be.
 
@@ -39,11 +41,31 @@ per-instance decision; the rule is P6 (independence) in [`SKILL.md`](SKILL.md), 
 
 ---
 
+## Two demands this exists for
+
+**Confirming a port did not drift.** A rewrite is the one change where the test suite stops being evidence: the tests are usually rewritten along with the code, so a green run says the new tests agree with the new code, not that the two implementations agree with each other. The claim spec is the part that does not move — `casestudy/port/claims.json` is read unchanged by the Python reference, the Go port and the Rust port, and the three readouts must match point by point. Tests bind to a language; claims do not. A boundary that is off by one shifts a witness (`[12,13,14]` → `[13,14,15]`) while the count stays at 3 — which is exactly the drift a totals-only gate lets through.
+
+**Auditing a change that raised nothing.** Parsers, type checkers, compilers and test suites all stop illegal changes; that surface is crowded. The blank one is the change that raises nothing at all — the key is still there, the type is still int, the suite is still green, and the semantics have moved. That is why "the change is legal and raises nothing" (P3) is the precondition this tool cannot run without, and why the readout is quadrants rather than a verdict: `casestudy/k8s/` shows removals landing in divergence on an existence baseline, and `scripts/delivery_gate.py` applies the same quadrants to a spec promise against test assertions inside one delivery.
+
+The mechanism is domain-agnostic because nothing in it knows about code; engineering clauses, theory definitions and research claims run through it unchanged. Those two demands are simply where somebody is stuck today.
+
+---
+
 ## Install and verify
 
 The library is `scripts/` plus `examples/`: standard library only, a flat directory rather
 than a package — modules import each other by bare name, so put `scripts/` on `PYTHONPATH`
 instead of copying a single file out.
+
+**First contact in one command** — no corpus, no third-party package, no setup:
+
+```bash
+python examples/value_type_fingerprint.py
+```
+
+It prints one full report; the quadrants read **common 25 / divergence 0 / dominance 1 / neither 0**, and the dominance witness is a single point (`cartFailure`, `off`) whose type changed while the key survived. The tail of the output is a **deliberately refused** claim (`READING_DISCRIMINATION_ZERO`) showing the gate declining to certify an uninformative account — a refusal is the mechanism working, not a failure.
+
+If that runs, the engine is alive. Everything below is about proving more than that.
 
 Verification needs a little more, in three corners only: `go` and `rustc` for
 `casestudy/port`, `pyarrow` for 7 of `casestudy/malecns`'s 24 assertions, and a corpus for
