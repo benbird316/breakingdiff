@@ -45,10 +45,11 @@ First public release.
   a clean summary over an empty run.
 - **Three exit tiers, the same as `receipt.py`**: 0 green, 1 gate red (block the
   commit), 2 the gate could not run. "Did not run" is not "ran red".
-- **Measured 2026-10-22**: 28 test files, 28/28 green in 42s with every corpus
-  present, 20s on a corpus-free tree. `pyarrow` is the only third-party package
-  the suite touches, declared in `requirements.txt` with the measured versions as
-  its anchor.
+- **Measured 2026-10-22**: 28 test files, 28/28 green in 39s with every corpus
+  present, 20s on a corpus-free tree, 32s with only `malecns` present (wall clock,
+  one machine — the figure moves with which corpora were fetched). `pyarrow` is the
+  only third-party package the suite touches, declared in `requirements.txt` with
+  the measured versions as its anchor.
 - **Line endings normalized to LF** (`.gitattributes`). Several tests compare
   output byte for byte, so an EOL difference between a Windows working tree and
   the Linux runner would turn a green local run red in CI with no code change.
