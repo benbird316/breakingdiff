@@ -252,6 +252,106 @@ def test_exempt_uses_verbatim_matching():
                             exempt=["src/notes.md"])
 
 
+# Forms whose `PREFIX:` suffix is empty or whitespace-only. Each must be refused:
+# an empty prefix matches every changed file, so one blank declaration silently
+# switches the whole file-level gate off.
+BLANK_PREFIX_FORMS = ["PREFIX:", "PREFIX: ", "PREFIX:\t", "PREFIX:　",
+                      "PREFIX: \t　"]
+
+
+def test_exempt_prefix_matching_is_normalized():
+    """A `PREFIX:` exemption is matched under the same `_norm` normalization as
+    coverage_guard: whitespace and full-width-space differences must not make a declared
+    prefix miss a file that is really under it.
+
+    The exact (verbatim) form stays verbatim — a different discipline, pinned by
+    test_exempt_uses_verbatim_matching above. A prefix is a declared pattern, so it gets
+    the pattern-level normalization; an exact exemption names one path, so it stays
+    exact.
+    """
+    require_change_coverage(["src/gen/parser.py"], {},
+                            exempt=["PREFIX: src/gen/ "])
+    # full-width space inside the declaration normalizes away too (str.split() treats
+    # it as whitespace, so it is joined out rather than kept inside the prefix)
+    require_change_coverage(["src/gen/parser.py"], {},
+                            exempt=["PREFIX: src　/gen/"])
+    # and a prefix that really does not cover the file still blocks
+    with raises(CoverageError):
+        require_change_coverage(["src/other/parser.py"], {},
+                                exempt=["PREFIX: src/gen/ "])
+
+
+def test_exempt_prefix_matches_normalized_changed_path():
+    """The changed-file side is normalized too, not only the declaration: a path carrying
+    stray whitespace is the same file, so a cleanly declared prefix still exempts it.
+
+    File-side half of the rule pinned by test_exempt_prefix_matching_is_normalized above
+    (that one pads only the declaration and leaves the changed path clean). Revert the
+    match to raw `f.startswith(p)` — dropping `_norm(f)` — and this test goes red while
+    the declaration-side test stays green; that asymmetry is why the two cases live in
+    two tests. A regression in either half must leave a red somewhere.
+    """
+    # Stray half-width space inside the path: "src/ auth.py" is "src/auth.py".
+    require_change_coverage(["src/ auth.py"], {}, exempt=["PREFIX:src/auth"])
+    # Full-width space is removed by the same normalization.
+    require_change_coverage(["src/　auth.py"], {}, exempt=["PREFIX:src/auth"])
+    # Normalization must not invent a match: a path really elsewhere still blocks.
+    with raises(CoverageError):
+        require_change_coverage(["vendor/auth.py"], {}, exempt=["PREFIX:src/auth"])
+
+
+def test_blank_prefix_file_exemption_is_refused():
+    """A `PREFIX:` with a blank suffix exempts every file — refuse it instead.
+
+    Pre-fix, `exempt=["PREFIX:"]` made require_change_coverage accept any unregistered
+    file: the file-level gate was fully off while still looking enabled. The message must
+    name the raw declaration so the broken line is findable.
+    """
+    for raw in BLANK_PREFIX_FORMS:
+        with raises(ValueError) as e:
+            require_change_coverage(["src/payment.py"], {"src/a.py": ["R1"]},
+                                    exempt=[raw])
+        msg = str(e.value)
+        assert "PREFIX" in msg, "the message must name the malformed declaration"
+        assert repr(raw) in msg, f"the message must show the blank form verbatim: {raw!r}"
+
+
+def test_mutation_blank_prefix_accepting_all_files_is_caught():
+    """Remove the blank-prefix guard and this file goes red: the pre-fix mutant accepts
+    every unregistered file on `exempt=["PREFIX:"]`, the real gate raises."""
+    def pre_fix_require_change_coverage(changed_files, file_coverage, exempt=()):
+        unknown = [f for f in changed_files
+                   if f not in file_coverage and f not in set(exempt)
+                   and not any(e.startswith("PREFIX:") and f.startswith(e[7:])
+                               for e in exempt)]
+        return unknown
+
+    assert pre_fix_require_change_coverage(
+        ["src/payment.py"], {"src/a.py": ["R1"]}, exempt=["PREFIX:"]) == [], \
+        "the mutant must reproduce the silent blanket exemption this test refuses"
+    with raises(ValueError):
+        require_change_coverage(["src/payment.py"], {"src/a.py": ["R1"]},
+                                exempt=["PREFIX:"])
+
+
+def test_mutation_raw_prefix_matching_is_caught():
+    """Revert prefix matching to raw `f.startswith(e[7:])` and this file goes red: the
+    padded declaration `PREFIX: src/gen/ ` no longer matches the file it declares."""
+    def raw_prefix_require_change_coverage(changed_files, file_coverage, exempt=()):
+        unknown = [f for f in changed_files
+                   if f not in file_coverage and f not in set(exempt)
+                   and not any(e.startswith("PREFIX:") and f.startswith(e[7:])
+                               for e in exempt)]
+        return unknown
+
+    padded = ["PREFIX: src/gen/ "]
+    assert raw_prefix_require_change_coverage(["src/gen/parser.py"], {},
+                                              exempt=padded) == ["src/gen/parser.py"], \
+        "the raw mutant must miss the declaration it was given"
+    # The real gate normalizes both sides and matches it.
+    require_change_coverage(["src/gen/parser.py"], {}, exempt=padded)
+
+
 # ── it stays quiet ────────────────────────────────────────────────
 def test_empty_spec_is_not_a_pass_by_default():
     """An empty spec must not be read as "everything passes".

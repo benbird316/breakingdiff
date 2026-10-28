@@ -25,7 +25,7 @@ Design notes:
   3. Distinguish two kinds of miss: items that should never be in the space
      (allowlist) vs items that should be in it but are not (gaps).
 """
-from typing import Iterable, Sequence, Set, Tuple
+from typing import Iterable, List, Sequence, Set, Tuple
 
 
 class CoverageError(ValueError):
@@ -51,6 +51,49 @@ def _norm(s: str) -> str:
     return "".join(s.split()).replace("　", "")
 
 
+PREFIX_MARK = "PREFIX:"
+
+
+def normalize_prefix(declaration: str) -> str:
+    """Return the normalized suffix of one `PREFIX:` declaration; refuse a blank one.
+
+    A blank suffix normalizes to "" and every string starts with "", so a single
+    `PREFIX:` (or `PREFIX:   `) in the exemption list would exempt every changed item of
+    the round: the escape hatch would be a silent switch that turns the gate off while
+    it still looks enabled. The caller must say which prefix is meant, so a blank suffix
+    raises ValueError naming the raw declaration (empty, spaces, tabs, full-width
+    space) instead of being ignored — dropping it silently would leave what the caller
+    meant to the gate, which is the same guessing this module rejects everywhere else.
+    """
+    prefix = _norm(declaration[len(PREFIX_MARK):])
+    if not prefix:
+        raise ValueError(
+            f"[CG:EMPTY_PREFIX] [coverage gate] exemption {declaration!r} declares "
+            f"{PREFIX_MARK} with a blank prefix (empty, whitespace, or a full-width "
+            "space).\n"
+            "  An empty prefix matches every changed item, so this declaration would "
+            "silently exempt the whole round.\n"
+            f"  Write the prefix you mean after {PREFIX_MARK} (it is normalized by "
+            "removing whitespace and full-width spaces).")
+    return prefix
+
+
+def _split_exempt(exempt: Iterable[str]) -> Tuple[Set[str], List[str]]:
+    """Split exemption declarations into (normalized exact markers, normalized prefixes).
+
+    Prefix declarations are normalized the same way as markers (`_norm` on both sides),
+    so a prefix means the same thing however it is spelled. Exact declarations are
+    normalized equality — not substring matching (see find_uncovered).
+    """
+    exact, prefixes = set(), []
+    for e in exempt:
+        if e.startswith(PREFIX_MARK):
+            prefixes.append(normalize_prefix(e))
+        else:
+            exact.add(_norm(e))
+    return exact, prefixes
+
+
 def find_uncovered(changed: Iterable[str], covered: Iterable[str],
                    exempt: Iterable[str] = ()) -> Tuple[Set[str], Set[str]]:
     """Split: return (real gaps, exempt items that never belonged in the space).
@@ -66,15 +109,12 @@ def find_uncovered(changed: Iterable[str], covered: Iterable[str],
     this file explicitly rejects; the exemption mechanism is no exception.
     When a prefix-based relaxation is genuinely needed, write `PREFIX:xxx`
     explicitly, so the relaxation is a checkable declaration rather than a
-    coincidence.
+    coincidence. `PREFIX:` with a blank suffix is refused (`ValueError`) rather than
+    treated as "match everything" — an empty prefix matches every marker and would
+    silently exempt the round.
     """
     cov = {_norm(x) for x in covered}
-    exempt_exact, exempt_prefix = set(), []
-    for e in exempt:
-        if e.startswith("PREFIX:"):
-            exempt_prefix.append(_norm(e[len("PREFIX:"):]))
-        else:
-            exempt_exact.add(_norm(e))
+    exempt_exact, exempt_prefix = _split_exempt(exempt)
 
     gaps, allowed = set(), set()
     for c in changed:
@@ -88,6 +128,17 @@ def find_uncovered(changed: Iterable[str], covered: Iterable[str],
     return gaps, allowed
 
 
+def _unique_verbatim(items: Iterable[str]) -> List[str]:
+    """Order-preserving verbatim dedupe: the same change listed twice is one change."""
+    seen, out = set(), []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
 def coverage_ratio(changed: Iterable[str], covered: Iterable[str],
                    exempt: Iterable[str] = ()) -> Tuple[int, int]:
     """Return (covered count, total changes this round); the caller computes the percentage.
@@ -99,8 +150,14 @@ def coverage_ratio(changed: Iterable[str], covered: Iterable[str],
     0/0 when everything is out of the space, which is worse).
     The ratio itself is not wrapped: return bare counts and let the caller decide how
     to present them, so a function that always reports 100% never lives in the library.
+
+    Duplicate entries in `changed` are the same change and are collapsed verbatim,
+    order-preserving, before the denominator is taken: `["a","a","b"]` with `["a"]`
+    covered is 1/2, not 2/3 — counting one change twice would make coverage read lower
+    than it is, and the denominator is supposed to be "how many changes this round",
+    not "how many times they were listed".
     """
-    changed = list(changed)
+    changed = _unique_verbatim(changed)
     gaps, _ = find_uncovered(changed, covered, exempt)
     return len(changed) - len(gaps), len(changed)
 

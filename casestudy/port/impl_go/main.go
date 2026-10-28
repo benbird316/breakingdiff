@@ -1,11 +1,11 @@
-// 移植层案例：Go 实现（标准库 encoding/json，零第三方依赖）。
+// Port-layer case: Go implementation (stdlib encoding/json, zero third-party dependencies).
 //
-// 读同一份 claims.json，独立实现算子求值 + 四象限 + verdict 键 + 见证点，
-// 输出 JSON 供 test_port.py 与 Python 参考实现逐点比对。
+// Reads the same claims.json and independently implements operator evaluation + four quadrants + verdict keys + witness points;
+// emits JSON so test_port.py can compare point by point with the Python reference.
 //
-// 用法：
+// Usage:
 //   go run main.go -spec ../../claims.json
-//   go run main.go -spec ../../claims.json -mutant boundary   # 错移植：ge 写成 gt
+//   go run main.go -spec ../../claims.json -mutant boundary   # wrong port: ge written as gt
 package main
 
 import (
@@ -80,7 +80,7 @@ func evalOp(op Op, point map[string]int, mutateBoundary bool) bool {
 	case "always":
 		return true
 	case "ge":
-		// 错移植：边界差一。故意保留在同一个求值点上，让它像真 bug 一样潜伏。
+		// Wrong port: off-by-one boundary. Deliberately kept at the same evaluation point so it lies dormant like a real bug.
 		if mutateBoundary {
 			return point[op.Field] > op.Value
 		}
@@ -150,7 +150,7 @@ func main() {
 		r.DivergenceWitness = []int{}
 		r.DominanceWitness = []int{}
 		for _, point := range spec.Domain {
-			// 域外判定也走同一套算子，但不吃 mutant：错移植只错在判定面。
+			// The out-of-domain decision uses the same operators but ignores the mutant: the wrong port errs only in the predicate surface.
 			if !evalOp(pair.P.Applies, point, false) || !evalOp(pair.Q.Applies, point, false) {
 				r.OutOfDomain++
 				continue

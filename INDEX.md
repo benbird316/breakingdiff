@@ -1,7 +1,9 @@
 # index — file navigation
 
-One line per file: what it is, and when to read it. The per-file notes are for people looking for a file;
+One line per primary file: what it is, and when to read it. The per-file notes are for people looking for a file;
 when you cannot tell which one to read, start here — you do not need to walk the whole tree.
+The `*_test.py` files are covered by their module's row — each one is that module's mutation-evidence lock — and are
+not repeated here.
 
 Maintenance discipline: **rules go in SKILL.md, methods go in references/, evidence goes in CHANGELOG.md, navigation goes in this file**.
 SKILL.md is what an agent reads on every trigger, so its length converts straight into trigger precision cost. This file holds itself to the same minimalism —
@@ -14,6 +16,7 @@ if it bloats, it defeats the reason it exists. For the argument, see README.md, 
 | `scripts/breakingdiff.py` | Core engine: compare / compare_n / render / render_n. Import it when you run a diff; do not read it on its own |
 | `scripts/coverage_guard.py` | Coverage gate for the surface under test (three-level silence defense). Run it before compare |
 | `scripts/delivery_gate.py` | Delivery gate for writing code. Before delivery it blocks the case where the spec made the commitment and the tests did not uphold it |
+| `scripts/ci_gate.py` | The single test entry point: discovers every test by name and runs it; the same script backs the pre-commit hook and CI. Run it after any change |
 | `scripts/predicate_alignment.py` | Dual-calibration-point predicate-distortion self-check. Before compare, to catch P/Q all-false distortion after key-shape drift |
 | `scripts/symbol_isolation.py` | Static warning for production symbols shared by P and Q. Read the intersection report when you suspect two accounts are same-source |
 | `scripts/receipt.py` | Deterministic JSON receipt + blind-written expectation. Write the receipt after a compare run; when auditing, re-execute via rerun_cmd |
@@ -30,7 +33,7 @@ if it bloats, it defeats the reason it exists. For the argument, see README.md, 
 | `scripts/version_stamp.py` | Single source of truth for the version, sync/check: the repo-root VERSION is the source, and derived sites are compared field by field, site by site (compare first, then write). When bumping the version for a release, or checking whether derived sites are in sync |
 | `scripts/leak_guard.py` | Blind-run leak guard: scans `SKILL.md` + `references/*.md` for test-assertion fingerprints (test function names, long assert messages) and grading keywords, so a context-free agent that reads only the skill learns usage rather than the grading account. Run it after editing `SKILL.md` or any reference |
 
-Each gate module has a same-named `*_test.py`: a mutation-evidence regression lock — break it and it must go red. The core engine (`breakingdiff.py`) is covered by the `examples/` suite instead. After changing the decision logic, rerun everything (see README.md, "install and verify").
+Each gate module has a same-named `*_test.py`: a mutation-evidence regression lock — break it and it must go red (except `ci_gate.py`, covered by the suite it runs, and the contract test `hooks_contract_test.py`, which guards three copies of the hook decision order). The core engine (`breakingdiff.py`) has its own `scripts/breakingdiff_test.py` (zero-domain banners, verdict wording, witness-cap notices) on top of the `examples/` suite. After changing the decision logic, rerun everything (see README.md, "install and verify").
 
 ## references/
 
@@ -43,7 +46,7 @@ Each gate module has a same-named `*_test.py`: a mutation-evidence regression lo
 | `references/receipt-format.md` | Receipt JSON field contract. Before auditing or consuming a receipt |
 | `references/hooks.md` | Hook installation snippet and Windows PowerShell wrapper. When installing the host hook |
 | `references/strength.md` | Strength-layer method: shape, band width provenance, preregistration and the error-mode ladder. When claims keep going red although the data is fine |
-| `references/iglossary.md` | Frozen term decisions from the English rewrite (source term → English). When a term choice looks arbitrary and you want the recorded reason |
+| `references/iglossary.md` | Frozen bilingual term decisions (English ↔ Chinese). When a term choice looks arbitrary and you want the recorded reason |
 
 ## examples/
 
@@ -56,10 +59,11 @@ Each gate module has a same-named `*_test.py`: a mutation-evidence regression lo
 | `examples/casestudy_test.py` | Casestudy instance gate: existence / count anchors / pure-script assertions. After changing any file under casestudy/ |
 | `examples/forgery_poc.py` | Forgery-capability baseline (permanent; not in TEST_FILES_ALL). When checking "effective against sloppiness ≠ effective against forgery" |
 | `examples/data/` | Instance corpus snapshot |
+| `examples/docaudit/` | Promise-vs-behavior fixture: four agent-produced CLI tools probed by context-free blind testers; 11 findings (9 doc-vs-behavior + 2 code defects; 6 high severity, 3 of them silent), tiers and mechanical metrics. When a detector needs a real promise-vs-behavior target |
+| `examples/docaudit/test_docaudit.py` | Regression lock for the docaudit fixture: resolves the promise-vs-behavior account over the four CLI tools. Run after changing the fixture or its claims |
 
 Each `*_test.py` is equivalent to the instance it belongs to: break the instance and it must go red.
 
-| `examples/docaudit/` | Promise-vs-behavior fixture: four agent-produced CLI tools probed by context-free blind testers; 11 findings (9 promise-not-upheld, 3 silent high-severity), tiers and mechanical metrics. When a detector needs a real promise-vs-behavior target |
 ## casestudy/
 
 | File | What it is · When to read it |
@@ -70,12 +74,21 @@ Each `*_test.py` is equivalent to the instance it belongs to: break the instance
 | `casestudy/TEACHING-malecns.md` | Strength-layer lesson (assertion strength vs the data's own occurrence pattern; the false-red staircase). When learning why true data reads as bad data |
 | `casestudy/TEACHING-port.md` | Port-layer lesson (one claim, spec-driven, three implementations; the readout shape of a wrong port). When learning "a claim is an asset" |
 | `casestudy/TEACHING-k8s.md` | Quadrant-reading lesson (on an existence baseline the removals land in `divergence`; a criterion the domain cannot support is refused by the gate rather than reported as zero). When learning how to read the four-quadrant table, or why a gate refusal beats a zero readout |
-| `casestudy/` subdirectories: [pdg/](casestudy/pdg/), [llama/](casestudy/llama/), [malecns/](casestudy/malecns/), [port/](casestudy/port/), [hubble/](casestudy/hubble/), [k8s/](casestudy/k8s/) | Six-domain instance corpus (all but `hubble/` carry claims; hubble is a pure script). Entry points under port/ are reference.py and test_port.py; malecns/ holds the strength-layer case and its corpus manifest; k8s/ is the programming-domain case and the only one whose main account is a gate refusal |
+| `casestudy/` subdirectories: [pdg/](casestudy/pdg/), [llama/](casestudy/llama/), [malecns/](casestudy/malecns/), [port/](casestudy/port/), [hubble/](casestudy/hubble/), [k8s/](casestudy/k8s/) | Six instance directories: five formal cases plus `hubble/`, a single-script reference prototype without a teaching doc (it builds claims and runs compare_n all the same). Entry points under port/ are reference.py and test_port.py; malecns/ holds the strength-layer case and its corpus manifest; k8s/'s main readout is the existence baseline — a secondary type-fingerprint account is refused by the gate |
 | `casestudy/k8s/fetch_data.py` | Fetches the two official Kubernetes OpenAPI snapshots (SHA256-pinned, verified before writing). Run when the corpus is missing; note that jsDelivr currently 403s on release-1.31 |
 | `casestudy/k8s/aligned.py` | Positive case: the existence readout over 2,049 request dimensions, plus the type-fingerprint account the discrimination gate refuses. Read when running the k8s case |
 | `casestudy/k8s/misaligned.py` | Negative case: baseline flip / single-group false green / `$ref`-blind invented drift. Read when learning the three degenerate shapes |
 | `casestudy/k8s/test_aligned.py` | 33 assertions: corpus hashes, frozen quadrant counts, the baseline flip in both orientations, the gate refusal, the degenerate fingerprints, and mutation evidence. Run when changing any of the four files above |
 | `casestudy/k8s/corpus_manifest.json` | Measured ledger for the two snapshots (hashes, sizes, mirror order, which conclusion dies if a file is absent, which fetch path is broken). A record, not the evidence — re-fetch rather than trusting it |
+
+## probes/
+
+| File | What it is · When to read it |
+|---|---|
+| `probes/blind_run/brief.md` | The blind-run task sheet: two materials, `SKILL.md` as the only entry point. Hand it to a context-free agent to test whether the tool is usable cold |
+| `probes/blind_run/README.md` | Failure atlas: the four shapes a failed run takes, what each means, and where to learn it. Read before scoring a run, or after one fails |
+
+The gitignored `probes/blind_run/_grader_local/` beside them is organizer-side scoring material — unpublished, and forbidden to a blind-run agent: reading it contaminates the round.
 
 ## Root
 
@@ -86,4 +99,8 @@ Each `*_test.py` is equivalent to the instance it belongs to: break the instance
 | README.md | Project positioning, how to run it, design rationale. When a person first encounters the project |
 | ORCHESTRATION.md | Multi-agent orchestration rules. Read before writing or verifying an assertion, or splitting a batch — binds executors, not only dispatchers |
 | AGENTS.md | Repository navigation map: to change X, which file to read first and which command to run. When you do not know where to start |
-| CHANGELOG.md | Incident log and mutation ledger. When tracing how a lesson came about |
+| CHANGELOG.md | Mechanism-level incident ledger (pre-1.0, reconstructed) plus release record and mutation ledger. When tracing how a lesson came about, or checking whether a defense line was ever proven |
+| LICENSE | MIT license text. When you need the terms of use |
+| requirements.txt | Verification dependencies — one, `pyarrow>=25,<27`; the library itself is standard-library only. Install it before the malecns assertions |
+| `.gitattributes` | Line-ending policy: LF everywhere, because several tests compare output byte for byte. Read when a Windows working tree disagrees with CI on bytes |
+| `.gitignore` | What does not ship: corpora, build artifacts, and the blind-run organizer material. Read before adding a file that looks like it should be committed |

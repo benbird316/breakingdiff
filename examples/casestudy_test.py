@@ -72,8 +72,8 @@ TEST_DEF_RE = re.compile(r'^\s*def\s+test_', re.M)
 # Expected constants: named, grep-able, auditable — the count-anchor numbers must not
 # scatter into bare literals; when instance assertions change, change these and leave
 # a trace in CHANGELOG, never edit the error text in place.
-EXPECTED_PDG_TESTS = 22
-EXPECTED_LLAMA_TESTS = 36
+EXPECTED_PDG_TESTS = 34
+EXPECTED_LLAMA_TESTS = 45
 EXPECTED_PORT_TESTS = 12
 EXPECTED_MALECNS_TESTS = 24
 EXPECTED_K8S_TESTS = 33

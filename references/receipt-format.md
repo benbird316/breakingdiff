@@ -1,4 +1,4 @@
-# Receipt format contract (receipt v2)
+# Receipt format contract (schema v2)
 
 Implementation source of truth: `scripts/receipt.py` (`SCHEMA_VERSION = 2`); this document is the human-readable field table. When the field table changes, bump the version and update this document in the same batch — every field in every table has a test in `receipt_test.py` pinning it, so documentation/implementation drift goes red in the tests first.
 
@@ -18,7 +18,7 @@ The auditor's standard action is not "read the receipt" but to re-execute and co
 | schema_version | int | Contract version; bumped when the field table changes, currently 2 |
 | run_kind | "pairwise" \| "nway" | Four-quadrant 4-counter and N-account shapes are two readout families; without this key reconcile has no key to compare. A hard-wired enum; mixing them raises ReceiptError |
 | claims_identity | list[{name, predicate, applies}] | The identity reconciliation key (see next section); pairwise keeps the P,Q semantic order (swapping them swaps the divergence/dominance columns), nway follows the final post-reorder order of result.names |
-| domain_digest | {size, first, last} | Partial digest of the comparison domain, capturing only "did the domain change", not pretending to be a completeness proof; domain must be an already-materialized list/tuple — a generator is consumed by compare, and the digest silently reads as 0 points |
+| domain_digest | {size, first, last} | Partial digest of the comparison domain, capturing only "did the domain change", not pretending to be a completeness proof; domain must be an already-materialized list/tuple — a generator is rejected at receipt time with `ReceiptError [RC:DOMAIN_NOT_MATERIALIZED]` (a size-0 digest would look normal, which is why it raises instead) |
 | rerun_cmd | str | Replay command; structurally rejects absolute paths (drive letter/UNC/leading single slash), because an absolute path becomes a lie after changing machines or directories |
 | bd_home | str | Absolute path of the skill repository root for this run. Distribution diagnostic metadata; not in reconcile's reconciliation key set (see the iron rules section at the end for the exemption) |
 | bd_source | str | Resolution level of bd_home; the enum source of truth is `bd_paths.SOURCES` (env/skill_dir/plugin_root/file_relative) |

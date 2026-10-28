@@ -116,6 +116,90 @@ def test_prefix_exemption_must_be_declared():
     assert "coverage gate description" in gaps2
 
 
+# Forms whose `PREFIX:` suffix is empty or whitespace-only. Each must be refused:
+# `_norm("") == ""`, and every string starts with "", so one blank declaration would
+# exempt every changed item of the round.
+BLANK_PREFIX_FORMS = ["PREFIX:", "PREFIX: ", "PREFIX:\t", "PREFIX:　",
+                      "PREFIX: \t　"]
+
+
+def test_blank_prefix_exemption_is_refused():
+    """A `PREFIX:` with an empty or whitespace-only suffix must raise, not exempt.
+
+    This is the gate's own escape hatch turned into a silent switch: the suffix
+    normalizes to "", `n.startswith("")` is true for every marker, so one blank
+    declaration moves every changed item into "allowed" and require_covered reports no
+    gap at all. Refusing the declaration is the only fix that keeps the decision at the
+    caller: silently dropping it would leave "what did the caller mean" to the gate.
+    """
+    for raw in BLANK_PREFIX_FORMS:
+        with raises(ValueError) as e:
+            find_uncovered(["a real gap"], CATALOG, exempt=[raw])
+        msg = str(e.value)
+        assert "PREFIX" in msg, "the message must name the malformed declaration"
+        assert repr(raw) in msg, f"the message must show the blank form verbatim: {raw!r}"
+    # The blanket exemption is unreachable through the gate and through the ratio too.
+    with raises(ValueError):
+        require_covered(["a real gap"], CATALOG, exempt=["PREFIX: "])
+    with raises(ValueError):
+        coverage_ratio(["a real gap"], CATALOG, exempt=["PREFIX:\t"])
+
+
+def test_blank_prefix_guard_keeps_a_usable_prefix_working():
+    """The blank check keys on the normalized suffix being empty, not on whitespace in
+    the declaration: `PREFIX: cover ` still declares the prefix `cover`.
+
+    This is the boundary against an over-tight guard. A guard that refuses every
+    declaration carrying whitespace — e.g. `e[7:] != e[7:].strip()` — would reject this
+    legal declaration and turn the gate into a false red for real callers.
+    """
+    gaps, allowed = find_uncovered(["coverage gate description"], CATALOG,
+                                   exempt=["PREFIX: cover "])
+    assert gaps == set()
+    assert allowed == {"coverage gate description"}
+
+
+def test_mutation_blank_prefix_blanket_exemption_is_caught():
+    """Remove the blank-prefix guard and this file goes red on the spot.
+
+    The mutant below keeps the pre-fix split: the suffix is stripped, so `PREFIX:`
+    becomes the empty prefix and every changed item lands in allowed. The real
+    implementation raises on exactly the same input — that difference is the criterion.
+    """
+    def pre_fix_find_uncovered(changed, covered, exempt=()):
+        prefixes = [e[len("PREFIX:"):].strip() for e in exempt
+                    if e.startswith("PREFIX:")]
+        gaps, allowed = set(), set()
+        for c in changed:
+            if any(c.startswith(p) for p in prefixes):
+                allowed.add(c)
+            else:
+                gaps.add(c)
+        return gaps, allowed
+
+    gaps, allowed = pre_fix_find_uncovered(["a real gap", "another gap"], [],
+                                           exempt=["PREFIX:"])
+    assert gaps == set() and allowed == {"a real gap", "another gap"}, \
+        "the mutant must reproduce the silent blanket exemption this test refuses"
+    with raises(ValueError):
+        find_uncovered(["a real gap", "another gap"], [], exempt=["PREFIX:"])
+
+
+def test_mutation_over_tight_blank_guard_is_caught():
+    """An over-tight guard goes red here: the mutant refuses any declaration whose raw
+    suffix carries whitespace, which rejects the usable `PREFIX: cover ` above."""
+    def over_tight_guard(exempt):
+        for e in exempt:
+            suffix = e[len("PREFIX:"):]
+            if e.startswith("PREFIX:") and suffix != suffix.strip():
+                raise ValueError(f"blank PREFIX: {e!r}")
+
+    with raises(ValueError):
+        over_tight_guard(["PREFIX: cover "])
+    # The real guard accepts it and the declaration does its job.
+    require_covered(["coverage gate description"], CATALOG, exempt=["PREFIX: cover "])
+
+
 # ------------------------------------------------------------ it stays quiet
 def test_fully_covered_passes_quietly():
     """The gate makes no noise — when everything is inside the space it must stay
@@ -169,6 +253,39 @@ def test_ratio_mutation_returning_in_scope_twice_is_caught():
     # implementation must tell the two apart
     assert mutated_ratio(["provenance", "outside-1"], CATALOG_) == (1, 1)
     assert coverage_ratio(["provenance", "outside-1"], CATALOG_) == (1, 2)   # the real implementation
+
+
+def test_ratio_counts_each_change_once():
+    """Duplicate entries are the same change; counting them twice inflates the
+    denominator and makes coverage read lower than it is.
+
+    Measured: `["a","a","b"]` with `["a"]` covered returned 2/3 before the fix — the
+    second "a" was counted as a separate uncovered change. Verbatim duplicates collapse,
+    order-preserving, before the denominator is taken: unique is 1/2.
+    """
+    assert coverage_ratio(["a", "a", "b"], ["a"]) == (1, 2)
+    # Non-adjacent duplicates collapse too (no "only neighbours" shortcut).
+    assert coverage_ratio(["a", "b", "a"], ["a"]) == (1, 2)
+    # All-covered duplicates stay a full ratio, not 2/2 over a padded denominator.
+    assert coverage_ratio(["provenance", "provenance"], CATALOG) == (1, 1)
+    # All-gap duplicates collapse to one uncovered change.
+    assert coverage_ratio(["outside", "outside"], CATALOG) == (0, 1)
+    # Deduplication is verbatim (order-preserving on the raw strings), not normalized:
+    # two differently-spelled markers are two entries.
+    assert coverage_ratio(["provenance", "prov enance"], CATALOG) == (2, 2)
+
+
+def test_mutation_counting_duplicates_is_caught():
+    """Remove the dedupe and the assertion above goes red: the mutant counts
+    `["a","a","b"]` as 2/3, the real implementation as 1/2."""
+    def un_deduped_ratio(changed, covered, exempt=()):
+        changed = list(changed)
+        gaps, _ = find_uncovered(changed, covered, exempt)
+        return len(changed) - len(gaps), len(changed)
+
+    assert un_deduped_ratio(["a", "a", "b"], ["a"]) == (2, 3), \
+        "the mutant must reproduce the inflated denominator this test refuses"
+    assert coverage_ratio(["a", "a", "b"], ["a"]) == (1, 2)
 
 
 # ------------------------------------------------------------ mutation evidence

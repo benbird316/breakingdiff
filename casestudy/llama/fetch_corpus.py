@@ -6,26 +6,40 @@ and impossible to distribute with the repository. So "data included" can only wo
 **bundle the way to fetch it, not the data itself**.
 Anyone who copies this directory runs this script once and gets a corpus identical to this case's.
 
-Compare pdg/fetch_data.py: that one is a 7.6 MB sqlite file with a stable official URL,
-so downloading it directly is enough. Here it is 2.1 GB, multiple assets, and needs unpacking,
-so asset-name pinning and an integrity check were added.
+Compare pdg/fetch_data.py: that corpus is only 7.6 MB but it is **pinned** to PDG 2024
+(the 2024/2025 official URLs now return 404), so that script only verifies/recovers and
+never downloads. Here it is 2.1 GB, several assets, and unpacking, so asset names and
+exact bytes/SHA256 are pinned in `asset_pins` in corpus_manifest.json and every download
+is verified item by item.
 
 How to run:
     python fetch_corpus.py            # download and unpack the three builds into ./llama-b<tag>/
     python fetch_corpus.py --root D:/somewhere   # download elsewhere
-    python fetch_corpus.py --asset cpu          # use the cpu build (18 MB each)
+    python fetch_corpus.py --asset cpu          # use the cpu build (about 17.3–18.7 MiB each; readout unverified)
+    python fetch_corpus.py --links              # print the asset URLs/bytes/SHA256 only; no download, no write
     python fetch_corpus.py --manifest          # ★ corpus present: rescan and update the artifact-side ledger
 
+★ The full asset list and manual download steps are in DOWNLOAD.md beside this script;
+  `--links` is the executable printout of the same list.
 ★ The corpus is in gitignore, but **the ledger is not** —
   corpus_manifest.json records measured artifact facts, so readout consistency can be checked even without the corpus.
   But it **cannot replace re-running the probes**: only a run against the real binaries counts as verification.
+★ Download verification: every zip is checked against its exact bytes + SHA256 before it is
+  unpacked; a mismatch refuses to unpack and deletes the bad file. An existing file is
+  verified too — a half-downloaded zip must not continue into extraction.
 """
 import argparse
+import hashlib
 import json
 import os
 import sys
 import urllib.request
 import zipfile
+
+# The Windows console defaults to GBK and the report uses glyphs outside that code
+# page. Switch to UTF-8 and downgrade unencodable characters so the script cannot
+# die with UnicodeEncodeError while printing its own warning.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 MANIFEST = os.path.join(_HERE, "corpus_manifest.json")
@@ -39,37 +53,147 @@ def load_manifest():
         return json.load(f)
 
 
-def asset_name(tag, kind):
-    """Take the asset name from the ledger. ★ The ledger is the only source; the script never assembles a name itself —
-    measured: b10472/b10595 are cuda-13.3 while b11681 is cuda-13.4;
-    the minor version changes over time, and hard-coding it points at an asset that does not exist."""
+def _pin_entry(tag):
+    """Take one build's asset pins from the ledger. ★ The ledger is the only source;
+    the script never assembles a name or guesses a size itself."""
     pins = load_manifest()["asset_pins"]
     if tag not in pins:
         raise SystemExit(
-            f"[FATAL] no asset record for {tag} in the ledger.\n"
+            f"[FATAL] the ledger has no asset record for {tag}.\n"
             f"       Recorded: {sorted(k for k in pins if not k.startswith('_'))}\n"
             f"       If the build number changed, add an entry under asset_pins in "
             f"{os.path.basename(MANIFEST)} first.")
-    entry = pins[tag]
+    return pins[tag]
+
+
+def asset_spec(tag, kind):
+    """Return (asset name, exact bytes, SHA256) for one build and asset kind.
+
+    ★ The ledger is the only source; the script never assembles a name itself —
+    measured: b10472/b10595 are cuda-13.3 while b11681 is cuda-13.4, the minor
+    version changes over time, and hard-coding it points at a missing asset.
+    ★ Bytes and SHA256 come from the same GitHub asset metadata; if either is
+    absent the download is refused, otherwise a half-downloaded zip would be
+    unpacked as if it were complete.
+    """
+    entry = _pin_entry(tag)
     if kind == "cuda":
-        return entry["used_asset"], entry
-    if kind == "cpu":
-        return entry["alternatives"]["cpu"], entry
-    raise SystemExit(f"unknown asset type: {kind}")
+        spec = {
+            "asset": entry.get("used_asset"),
+            "bytes": entry.get("used_asset_bytes"),
+            "sha256": entry.get("used_asset_sha256"),
+        }
+    elif kind in ("cpu", "cuda-12.4"):
+        alt = entry.get("alternatives", {}).get(kind, {})
+        spec = {
+            "asset": alt.get("asset"),
+            "bytes": alt.get("bytes"),
+            "sha256": alt.get("sha256"),
+        }
+    else:
+        raise SystemExit(f"unknown asset type: {kind}")
+    missing = [k for k in ("asset", "bytes", "sha256") if not spec.get(k)]
+    if missing:
+        raise SystemExit(
+            f"[FATAL] asset pins for {tag}/{kind} lack {missing}; refusing to download "
+            f"an asset without an anchor.\n"
+            f"       Add them under asset_pins in {os.path.basename(MANIFEST)}.")
+    return spec
 
 
-def download(url, dst, expect_mb=None):
-    """Download one zip. ★ No third-party library —
-    this repository has to run after being copied elsewhere, so fewer dependencies is better."""
+def asset_name(tag, kind):
+    """Backwards-compatible accessor: the asset file name for one build/kind."""
+    return asset_spec(tag, kind)["asset"]
+
+
+def asset_url(tag, spec):
+    return (f"https://github.com/{REPO}/releases/download/"
+            f"{tag}/{spec['asset']}")
+
+
+def print_links():
+    """--links: print URLs/bytes/SHA256 for the three asset categories.
+
+    Reads only the manifest — no download, no corpus scan, no manifest write.
+    The asset list is same-source as DOWNLOAD.md (both come from asset_pins in
+    corpus_manifest.json), so the doc table and this printout match item by item.
+    """
+    titles = (
+        ("cuda", "used / cuda-13.x (default; this case's original readout was measured on these three)"),
+        ("cpu", "cpu (smaller; readout unverified)"),
+        ("cuda-12.4", "cuda-12.4 (alternative runtime; not used for the readout)"),
+    )
+    print("llama.cpp corpus asset list (read-only: no download, no file writes)")
+    print(f"source: asset_pins in {os.path.basename(MANIFEST)}")
+    used_total = 0
+    for kind, title in titles:
+        print()
+        print(f"[{title}]")
+        for tag in TAGS:
+            spec = asset_spec(tag, kind)
+            print(f"  {tag}  {spec['asset']}")
+            print(f"    bytes  {spec['bytes']:,}")
+            print(f"    sha256 {spec['sha256']}")
+            print(f"    url    {asset_url(tag, spec)}")
+            if kind == "cuda":
+                used_total += spec["bytes"]
+    print()
+    print(f"used total: {used_total:,} bytes"
+          f" (about {used_total / 1048576:.1f} MiB / {used_total / 1e6:.1f} MB)")
+    print("about 2.1 GB unpacked. Manual download and verification steps are in DOWNLOAD.md.")
+
+
+def verify_asset(path, expected_bytes, expected_sha256):
+    """Pure function: verify a downloaded file by bytes + SHA256 -> (ok, explanation).
+
+    Decoupled from download so tests never need the network. ★ A size check alone
+    is not enough: an interrupted zip usually does not add up to the right size,
+    but a zip with swapped bad bytes can have exactly the same size.
+    """
+    if not os.path.exists(path):
+        return False, "file does not exist"
+    size = os.path.getsize(path)
+    if size != expected_bytes:
+        return False, (f"byte count mismatch: got {size:,}, expected {expected_bytes:,}"
+                       f" (difference {expected_bytes - size:+,})")
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    actual = digest.hexdigest()
+    if actual.lower() != str(expected_sha256).lower():
+        return False, f"SHA256 mismatch: got {actual}, expected {expected_sha256}"
+    return True, f"bytes {size:,} and SHA256 match"
+
+
+def download(url, dst, spec):
+    """Download one zip and **verify it before handing it to extraction**.
+
+    - Existing file: verified first; on mismatch it is deleted and downloaded again
+      (a half zip must not stay around).
+    - Downloading: written to .part, then checked against bytes + SHA256, then
+      atomically renamed.
+    ★ No third-party library — this repository has to run after being copied
+    elsewhere, so fewer dependencies is better.
+    """
+    expected_bytes = spec["bytes"]
+    expected_sha256 = spec["sha256"]
     if os.path.exists(dst) and os.path.getsize(dst) > 0:
-        print(f"    already present, skipping download: {os.path.basename(dst)}"
-              f" ({os.path.getsize(dst) / 1e6:.0f} MB)")
-        return dst
-    size_hint = f", about {expect_mb} MB" if expect_mb else ""
-    print(f"    downloading{size_hint}: {os.path.basename(dst)}")
+        ok, why = verify_asset(dst, expected_bytes, expected_sha256)
+        if ok:
+            print(f"    already present and verified, skipping download: {os.path.basename(dst)}"
+                  f" ({expected_bytes:,} bytes)")
+            return dst
+        print(f"    already present but verification failed ({why}); deleting and re-downloading.")
+        os.remove(dst)
+
+    part = dst + ".part"
+    if os.path.exists(part):
+        os.remove(part)
+    print(f"    downloading (about {expected_bytes / 1e6:.0f} MB; verified against bytes + SHA256 afterwards):")
     print(f"      {url}")
     try:
-        with urllib.request.urlopen(url, timeout=60) as r, open(dst, "wb") as f:
+        with urllib.request.urlopen(url, timeout=60) as r, open(part, "wb") as f:
             total = 0
             while True:
                 chunk = r.read(1 << 20)
@@ -79,10 +203,21 @@ def download(url, dst, expect_mb=None):
                 total += len(chunk)
                 print(f"\r      received {total / 1e6:6.1f} MB", end="", flush=True)
     except Exception as e:
+        if os.path.exists(part):
+            os.remove(part)
         print(f"\n    [FATAL] download failed: {e}")
         print(f"    If the network is restricted, download it manually, put it in this directory, and rerun:\n      {url}")
         raise SystemExit(1)
     print()
+    ok, why = verify_asset(part, expected_bytes, expected_sha256)
+    if not ok:
+        os.remove(part)
+        print(f"    [FATAL] download finished but the integrity check failed: {why}")
+        print(f"    Deleted the bad file {os.path.basename(part)}; rerun this script.")
+        print(f"    Ledger expectations: {expected_bytes:,} bytes / {expected_sha256}")
+        raise SystemExit(1)
+    os.replace(part, dst)
+    print(f"    done and verified: {os.path.basename(dst)} ({expected_bytes:,} bytes)")
     return dst
 
 
@@ -109,15 +244,11 @@ def extract(zip_path, root, tag):
 
 
 def fetch_one(tag, root, kind, dl_dir):
-    name, entry = asset_name(tag, kind)
-    url = (f"https://github.com/{REPO}/releases/download/"
-           f"{tag}/{name}")
-    expect_mb = entry.get("used_asset_size_mb") or 20
-    if kind == "cpu":
-        expect_mb = int(str(entry["alternatives"]["cpu"]).split("(")[1]
-                        .split("MB")[0])
+    spec = asset_spec(tag, kind)
+    name = spec["asset"]
+    url = asset_url(tag, spec)
     os.makedirs(dl_dir, exist_ok=True)
-    zp = download(url, os.path.join(dl_dir, name), expect_mb)
+    zp = download(url, os.path.join(dl_dir, name), spec)
     extract(zp, root, tag)
     return target_dir_ok(root, tag)
 
@@ -216,13 +347,21 @@ def main(argv=None):
                     help="root directory to unpack into (default: this script's directory)")
     ap.add_argument("--asset", choices=("cuda", "cpu"), default="cuda",
                     help="cuda=match this case's original readout (about 150 MB each); "
-                         "cpu=8 times smaller (about 18 MB), "
+                         "cpu=8 times smaller (about 17.3–18.7 MiB), "
                          "but nobody has verified that the probe readout is the same")
     ap.add_argument("--keep-zips", action="store_true",
                     help="keep the downloaded zips (also kept by default; see the note below)")
+    ap.add_argument("--links", action="store_true",
+                    help="print the URLs/bytes/SHA256 of the used/cpu/cuda-12.4 assets only; "
+                         "no download, no corpus scan (manifest only), no ledger write "
+                         "(the same list is in DOWNLOAD.md)")
     ap.add_argument("--manifest", action="store_true",
                     help="do not download; only rescan the existing corpus and update the artifact-side ledger")
     args = ap.parse_args(argv)
+
+    if args.links:
+        print_links()
+        return
 
     root = os.path.abspath(args.root or _HERE)
 
@@ -239,10 +378,10 @@ def main(argv=None):
     print(f"  corpus root: {root}")
     print(f"  asset type: {args.asset}"
           + (" (matches this case's original readout)" if args.asset == "cuda"
-             else " (★ smaller, but readout equivalence is unverified)"))
-    print(f"  asset names come from asset_pins in {os.path.basename(MANIFEST)},")
+             else " (★ smaller, but readout equivalence is unverified, about 17.3–18.7 MiB each)"))
+    print(f"  asset names / bytes / SHA256 come from asset_pins in {os.path.basename(MANIFEST)},")
     print(f"  not assembled in the script — measured: b10472/b10595 are cuda-13.3,")
-    print(f"b11681 is cuda-13.4, and the minor version changes over time.")
+    print(f"b11681 is cuda-13.4, and the minor version changes over time. Every download is verified.")
 
     already = all(target_dir_ok(root, t) for t in TAGS)
     if already:

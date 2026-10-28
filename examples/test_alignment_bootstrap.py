@@ -162,6 +162,10 @@ TEST_FILES_ALL = [
     # strength_calibration: the strength layer's measured ladder (malecns case).
     # Same reason: a missed file = assertions there are counted as gaps on the P side.
     os.path.join(ROOT, 'scripts', 'strength_calibration_test.py'),
+    # Added 2026-10-29: assertions for the core engine's zero-domain banners, verdict
+    # wording and witness-cap notices (breakingdiff_test.py). Same reason as the list
+    # above: a missed file = assertions there are counted as gaps on the P side.
+    os.path.join(ROOT, 'scripts', 'breakingdiff_test.py'),
 ]
 TEST_CORPUS = "\n".join(_read(p) for p in TEST_FILES_ALL)
 

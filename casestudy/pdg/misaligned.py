@@ -20,6 +20,11 @@ import os
 import sqlite3
 import sys
 
+# The Windows console defaults to GBK and the report uses glyphs outside that code
+# page. Switch to UTF-8 and downgrade unencodable characters so the script cannot
+# die with UnicodeEncodeError while printing its own warning.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # ★ Search upward for breakingdiff.py instead of hard-coding "how many levels up".
 #   A hard-coded depth silently turns into ModuleNotFoundError once this directory
@@ -42,18 +47,30 @@ _ROOT = _find_scripts_root()
 sys.path.insert(0, os.path.join(_ROOT, "scripts"))
 
 from breakingdiff import Claim, ProvenanceError, compare_n, render_n  # noqa: E402
+# ★ Same as aligned.py: make the sibling fetch_data importable even when this file
+#   is loaded by path rather than run from its own directory.
+sys.path.insert(0, _HERE)
+import fetch_data  # noqa: E402  # the pinned corpus identity and its verifier
 
 DB = os.path.join(_HERE, "pdg.sqlite")
 
 
 def _con():
-    # ★ Same as aligned: checking exists alone is not enough — sqlite3.connect creates a
-    #   0-byte empty database out of thin air.
+    # ★ Same as aligned: checking exists alone is not enough — sqlite3.connect creates
+    #   a 0-byte empty database out of thin air.
     if not os.path.exists(DB) or os.path.getsize(DB) == 0:
         raise SystemExit(
             f"[FATAL] data file missing or empty: {DB}\n"
-            f"       Run python fetch_data.py first to download it."
+            f"{fetch_data.recovery_text(DB)}"
         )
+    # ★ Corpus-version guard, same as aligned.py: the 2024/2026 swap must be
+    #   blocked on every read path, not only at the fetch entry.
+    try:
+        fetch_data.verify_sqlite(DB, check_sha256=False)
+    except fetch_data.PinError as e:
+        raise SystemExit(
+            f"[FATAL] corpus does not match the pinned identity; refusing to read:\n{e}\n"
+            f"       Run python fetch_data.py for verification/recovery steps.")
     return sqlite3.connect(DB)
 
 

@@ -46,7 +46,7 @@ Recursive reminder: Q itself has an oracle gap. The bootstrap spec was written b
 
 ## Examples
 
-`examples/test_alignment_bootstrap.py` is the bootstrap version: P = the assertions of this skill's test suite, Q = the commitments of SKILL.md. The four-quadrant readout changes as the catalog grows (15 items in the first version, 13 after removing two rot-prone numbers from the docs; measured 2026-10-16: 71 items, common 50, dominance 17/71 = 24%, divergence 4/71 = 6%, neither 0) — this count varies with the corpus; do not hard-wire it in the docs. The readout of record is the last line of `python test_alignment_bootstrap.py`.
+`examples/test_alignment_bootstrap.py` is the bootstrap version: P = the assertions of this skill's test suite, Q = the commitments of SKILL.md. The four-quadrant readout changes as the catalog grows (15 items in the first version, 13 after removing two rot-prone numbers from the docs; measured 2026-10-29: 73 items, common 50, dominance 19/73 = 26%, divergence 4/73 = 5%, neither 0) — this count varies with the corpus; do not hard-wire it in the docs. The readout of record is the last line of `python test_alignment_bootstrap.py`.
 
 Run: `cd examples && python test_alignment_bootstrap.py`
 

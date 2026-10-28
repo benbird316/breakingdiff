@@ -1,32 +1,40 @@
-# 第三方语料不进 git，用 fetch 脚本现场获取。
+# Third-party corpora do not go into git; fetch scripts obtain them on demand.
+# The one exception is pdg.sqlite (see below).
 
-# PDG sqlite：约 7.6MB，官方有稳定URL
+# PDG sqlite: 7,593,984 bytes (about 7.24 MiB). This case pins PDG 2024, while the
+# online edition has already moved to an incompatible 2026 (the 2024/2025 URLs now
+# return 404), so this one file is committed to the repository as a re-runnable
+# corpus; every other *.sqlite stays out of git.
 *.sqlite
+!pdg/pdg.sqlite
 
-# llama.cpp 官方构建：解压后共约 2.1GB
-# —— 绝不能进 git。资产名固定在 llama/corpus_manifest.json 的 asset_pins 里，
-#    由 llama/fetch_corpus.py 下载解压。
+# llama.cpp official builds: about 2.1 GB once unpacked
+# — they must never go into git. Asset names are pinned in
+#   llama/corpus_manifest.json under asset_pins and fetched/unpacked by
+#   llama/fetch_corpus.py.
 llama/llama-b*/
 llama/downloads/
 *.zip
 
-# ★ 注意：llama/corpus_manifest.json **要**进 git。
-#   它记的是产物侧实测事实（有什么、多大、探针读到什么），
-#   即使没有语料，读者也能核对读数一致性。
-#   它不能替代重跑探针 —— 所以 fetch_corpus.py 必须一起进。
+# ★ Note: llama/corpus_manifest.json **must** go into git.
+#   It records measured artifact-side facts (what exists, how big, what the
+#   probes read); even without the corpus a reader can check readout consistency.
+#   It cannot replace re-running the probes — which is why fetch_corpus.py ships too.
 
-# port/ 两个移植的编译产物：现场用 rustc 生成，不进 git
+# port/: build artifacts of the two ports, produced on the spot with rustc; not in git
 *.exe
 *.pdb
 port/impl_rust/port_rust
 
-# malecns 两份 feather：56MB，GCS 直链现场取，SHA256 锚在 test_aligned.py
+# malecns: two feather files, 56 MB, fetched live from a GCS direct link;
+# SHA256 anchored in test_aligned.py
 malecns/*.feather
 
-# k8s 两份官方 OpenAPI 快照：6.2MB，jsDelivr/镜像现场取，
-# SHA256 锚在 k8s/fetch_data.py 的 ASSETS 里（并由 test_aligned.py 复核）。
+# k8s: two official OpenAPI snapshots, 6.2 MB, fetched live from jsDelivr/mirrors;
+# SHA256 anchored in ASSETS in k8s/fetch_data.py (and re-verified by test_aligned.py).
 k8s/k8s-*.json
 
-# ★ 注意：k8s/corpus_manifest.json **要**进 git（同 llama/malecns 的理由）——
-#   记的是语料侧的实测事实（哈希、大小、镜像是谁、哪条路径已经坏了）。
-#   它不能替代重跑 aligned.py —— 所以 fetch_data.py 必须一起进。
+# ★ Note: k8s/corpus_manifest.json **must** go into git (same reason as
+#   llama/malecns) — it records measured corpus-side facts (hash, size, which
+#   mirror, which path is already broken). It cannot replace re-running
+#   aligned.py — which is why fetch_data.py ships too.

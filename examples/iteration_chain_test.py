@@ -1,16 +1,74 @@
 # -*- coding: utf-8 -*-
 """Permanent regression suite for iteration_chain: ratchet capture, outlier attribution,
-degenerate equivalence with pairwise, and gate reuse."""
+degenerate equivalence with pairwise, gate reuse, and the console-encoding contract of
+the casestudy CLI entries."""
+import os
+import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
+sys.path.insert(0, str(REPO / "scripts"))
 
 from breakingdiff import (Claim, ProvenanceError, SourceTestError,
                           compare, compare_n)
 from iteration_chain import (CHANGELOG_V1, DOMAIN, SPECS, main,
                              make_version_claim)
+
+# Discovery criterion for a casestudy CLI entry: a script on disk with an
+# `if __name__ == "__main__":` guard. Discovery is reconciled against the explicit
+# list below, so a newly added entry that nobody registered goes red on the spot.
+ENTRY_MAIN_RE = re.compile(r"^if __name__ == [\"']__main__[\"']:", re.M)
+
+# Every CLI entry under casestudy/ — all of them must switch stdout to UTF-8 before
+# __main__. A Chinese Windows console defaults to GBK and the report contains ⚠️/★,
+# which are outside that code page; an entry that does not switch crashes with
+# UnicodeEncodeError at exactly the moment it is supposed to raise the alarm — the
+# script dying while it should speak is worse than staying silent.
+# The list may only grow/shrink explicitly: a missing registration is caught by
+# test_gbk_smoke_skips_are_named (enumerate completely or declare the gap).
+CASESTUDY_CLI_ENTRIES = (
+    "casestudy/hubble/case_study.py",
+    "casestudy/k8s/aligned.py",
+    "casestudy/k8s/fetch_data.py",
+    "casestudy/k8s/misaligned.py",
+    "casestudy/llama/aligned.py",
+    "casestudy/llama/fetch_corpus.py",
+    "casestudy/llama/misaligned.py",
+    "casestudy/malecns/aligned.py",
+    "casestudy/malecns/fetch_corpus.py",
+    "casestudy/malecns/misaligned.py",
+    "casestudy/pdg/aligned.py",
+    "casestudy/pdg/fetch_data.py",
+    "casestudy/pdg/misaligned.py",
+    "casestudy/port/reference.py",
+)
+
+# The behaviour smoke only runs entries that need no external corpus (pdg.sqlite and
+# claims.json are tracked in the repo). Entries that need the ~2.1GB llama build or
+# the ~56MB malecns feather tables are skipped with the reason named — never silently
+# skipped: "did not run" and "ran and passed" must stay distinguishable in the report.
+GBK_SMOKE_RUNNABLE = (
+    ("casestudy/hubble/case_study.py", "pure script, no external corpus"),
+    ("casestudy/pdg/aligned.py", "uses the pdg.sqlite tracked in the repo"),
+    ("casestudy/pdg/misaligned.py", "uses the pdg.sqlite tracked in the repo"),
+    ("casestudy/pdg/fetch_data.py", "verifies the tracked pdg.sqlite; does not download"),
+    ("casestudy/port/reference.py", "uses the claims.json tracked in the repo"),
+)
+GBK_SMOKE_SKIPPED = (
+    ("casestudy/k8s/aligned.py", "needs the ~6MB OpenAPI snapshots"),
+    ("casestudy/k8s/misaligned.py", "needs the ~6MB OpenAPI snapshots"),
+    ("casestudy/k8s/fetch_data.py", "fetches the ~6MB OpenAPI snapshots"),
+    ("casestudy/llama/aligned.py", "needs llama-b*/ (~2.1GB extracted)"),
+    ("casestudy/llama/misaligned.py", "needs llama-b*/ (~2.1GB extracted)"),
+    ("casestudy/llama/fetch_corpus.py", "fetches ~450MB of llama.cpp assets"),
+    ("casestudy/malecns/aligned.py", "needs two feather tables (~56MB)"),
+    ("casestudy/malecns/misaligned.py", "needs two feather tables (~56MB)"),
+    ("casestudy/malecns/fetch_corpus.py", "fetches the ~56MB feather tables"),
+)
 
 
 class TestIterationChain(unittest.TestCase):
@@ -171,6 +229,103 @@ class TestRatchetDirection(unittest.TestCase):
         end."""
         rn = main()
         self.assertEqual(rn.ratchet_total, 3)
+
+
+class TestConsoleEncoding(unittest.TestCase):
+    """A Chinese Windows console defaults to GBK, and the report's ⚠️/★ are outside
+    that code page. An entry that does not switch its standard streams to UTF-8
+    crashes with UnicodeEncodeError at the first ratchet warning — the script dying
+    exactly when it is supposed to speak is worse than staying silent.
+
+    Three layers, because each one alone has a hole:
+      · the behaviour smoke runs the corpus-free entries under
+        PYTHONIOENCODING=gbk and checks exit code / stderr / stdout bytes;
+      · the static guard pins the switch inside the corpus-dependent entries, which
+        the behaviour smoke can never run on a corpus-free checkout;
+      · the enumeration reconciliation keeps both lists equal to what is on disk.
+    """
+
+    def test_casestudy_cli_entries_switch_stdout_to_utf8(self):
+        """Static guard (14/14): every casestudy CLI entry switches stdout first.
+
+        The behaviour smoke only covers the corpus-free entries; this test makes
+        "reconfigure deleted from a corpus entry" go red as well, so the static
+        coverage has no gap. The criterion is the entry's fixed shape — this repo
+        switches before __main__ everywhere; changing the shape means changing this
+        test with it.
+        """
+        for rel in CASESTUDY_CLI_ENTRIES:
+            with self.subTest(entry=rel):
+                path = REPO / rel
+                self.assertTrue(path.is_file(), f"entry does not exist: {rel}")
+                src = path.read_text(encoding="utf-8")
+                self.assertIn(
+                    "sys.stdout.reconfigure(", src,
+                    f"{rel} is missing the stdout UTF-8 switch: under a GBK console, "
+                    f"writing ⚠️/★ raises UnicodeEncodeError")
+
+    def test_gbk_console_casestudy_entries_do_not_crash(self):
+        """Parameterized GBK smoke: run each corpus-free entry as a subprocess with
+        PYTHONIOENCODING=gbk.
+
+        Three assertions: exit 0; no UnicodeEncodeError in stderr; stdout decodes as
+        valid UTF-8. The third one covers the failure mode where reconfigure was
+        removed but the output happens to be GBK-encodable: that does not crash, it
+        writes GBK bytes that the terminal then renders as mojibake. The skip reasons
+        for the corpus-dependent entries are reconciled by the next test.
+        """
+        env = dict(os.environ, PYTHONIOENCODING="gbk")
+        for rel, why in GBK_SMOKE_RUNNABLE:
+            with self.subTest(entry=rel):
+                path = REPO / rel
+                self.assertTrue(path.is_file(), f"entry does not exist: {rel} ({why})")
+                proc = subprocess.run(
+                    [sys.executable, str(path)], cwd=str(path.parent),
+                    env=env, capture_output=True)
+                err = proc.stderr.decode("utf-8", "replace")
+                self.assertEqual(
+                    proc.returncode, 0,
+                    f"{rel} crashed under a GBK console ({why}): {err}")
+                self.assertNotIn(
+                    "UnicodeEncodeError", err,
+                    f"{rel} raised UnicodeEncodeError while writing stderr: {err}")
+                try:
+                    proc.stdout.decode("utf-8")
+                except UnicodeDecodeError:
+                    self.fail(
+                        f"{rel}'s stdout is not valid UTF-8 — the entry did not switch "
+                        f"its standard streams to UTF-8, so a GBK terminal shows "
+                        f"mojibake or crashes: {proc.stdout[:200]!r}")
+                self.assertTrue(proc.stdout, f"{rel} produced no output; the smoke proves nothing")
+
+    def test_gbk_smoke_skips_are_named(self):
+        """Enumeration completeness: the CLI entries on disk = the explicit list =
+        runnable ∪ skipped-with-a-reason.
+
+        Disk discovery (`if __name__ == "__main__":`) catches "a new entry was never
+        registered"; the list reconciliation catches "the same entry is both run and
+        skipped"; the non-empty reason catches "silently skipped". All three layers
+        are required.
+        """
+        discovered = set()
+        for path in (REPO / "casestudy").rglob("*.py"):
+            if "__pycache__" in path.parts or path.name.startswith("test_"):
+                continue
+            if ENTRY_MAIN_RE.search(path.read_text(encoding="utf-8")):
+                discovered.add(path.relative_to(REPO).as_posix())
+        self.assertEqual(
+            discovered, set(CASESTUDY_CLI_ENTRIES),
+            "the entry list does not match the disk: extra on disk "
+            f"{sorted(discovered - set(CASESTUDY_CLI_ENTRIES))}, extra in the list "
+            f"{sorted(set(CASESTUDY_CLI_ENTRIES) - discovered)}")
+        runnable = {rel for rel, _ in GBK_SMOKE_RUNNABLE}
+        skipped = {rel for rel, _ in GBK_SMOKE_SKIPPED}
+        self.assertEqual(runnable & skipped, set(), "the same entry cannot be both run and skipped")
+        self.assertEqual(
+            runnable | skipped, discovered,
+            f"entry classification is incomplete (who is missing?): {discovered - runnable - skipped}")
+        for rel, why in GBK_SMOKE_SKIPPED:
+            self.assertTrue(why.strip(), f"{rel} has an empty skip reason")
 
 
 if __name__ == "__main__":

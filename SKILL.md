@@ -3,7 +3,7 @@ name: breakingdiff
 license: MIT
 metadata:
   author: Benbird316
-description: Use when you are about to claim that two or more accounts of one artifact agree, on a read-through alone. A claim differential turns that claim into a recomputable readout. One executable claim per account, point-by-point over a shared parameter domain, four quadrants (common, divergence, dominance, neither) each with a live witness. Three jobs carry the demand. A Python to Rust/Go port against its source; a bug fix against the behaviour it promised to leave alone; an agent's early claim against the artifact it finally lands. It will report only divergence, never adjudicate. Needs N>=2 independent accounts whose parameter points can be enumerated, a change that raises no error, bivalent predicates. Do not trigger for one material, for an account that is prose and cannot be enumerated, line diffs, code-quality opinions, public-spec API compatibility (oasdiff covers it), tolerance-based numeric checks, or when a verdict on who is right is wanted.
+description: Use when you are about to claim that two or more accounts of one artifact agree, on a read-through alone. A claim differential turns that claim into a recomputable readout. One executable claim per account, point-by-point over a shared parameter domain, four quadrants (common, divergence, dominance, neither) each with a live witness. Three jobs carry the demand. A Python to Rust/Go port against its source; a bug fix against the behaviour it promised to leave alone; an agent's early claim against the artifact it finally lands. It reports where the accounts differ (and where they agree), never which side is right. Needs N>=2 independent accounts whose parameter points can be enumerated, a change that raises no error, bivalent predicates. Do not trigger for one material, for an account that is prose and cannot be enumerated, line diffs, code-quality opinions, public-spec API compatibility (oasdiff covers it), tolerance-based numeric checks, or when a verdict on who is right is wanted.
 ---
 
 # breakingdiff — a claim differ
@@ -17,7 +17,7 @@ dominance  ¬P ∧  Q        Q is stronger ← the product: new capabilities the
 neither    ¬P ∧ ¬Q        neither holds
 ```
 
-**Divergence ≠ better.** The tool reports where things differ; it does not adjudicate which side is right.
+**Divergence ≠ better.** The tool reports where things differ; it does not adjudicate which side is right. The short form, **report only divergence, never adjudicate**, means all four quadrants are reported and only the correctness verdict is withheld.
 
 ## When to use, when not to
 
@@ -26,6 +26,8 @@ neither    ¬P ∧ ¬Q        neither holds
 Use when: two legal snapshots of one config/spec/policy; two implementations on the same input; behavioral equivalence before and after a refactor; a clause-by-clause comparison of acceptance criteria; two definitions — find counterexamples in the same parameter domain; a clause-by-clause comparison of what the evidence covers (research); a change with no public spec and no off-the-shelf gate — the niche where all the value sits in P3.
 
 Do not use when: an allow/deny verdict is needed; you need to adjudicate who is right; OpenAPI changes (oasdiff covers them); the change raises an error (parsers and compilers already stop it); the value survived but its meaning changed (`total_cents` cents→yuan) — formalize the semantics first; any of the six structural preconditions is missing.
+
+One exclusion deserves its own sentence, because it is easy to miss: **tolerance-based numeric checks** (floating-point equality, p-value thresholds). A tolerance is not a boolean the tool can decide — it is a third state someone chose by hand, and who owns it changes the readout. Tolerance → read **references/domain-mapping.md** → it pins why the decision rule has to be settled before running.
 
 ### Six structural preconditions
 
@@ -72,6 +74,8 @@ Need a file → `INDEX.md`. No MCP: two entry points for one thing confuse the t
 
 Applied examples by layer: pdg data-extraction, llama probe+ledger, malecns strength, port, k8s scope; run them via `casestudy/README.md`.
 
+**Two cases pin their corpus instead of fetching whatever is current.** `pdg` is pinned to the PDG 2024 sqlite — edition 2024, schema 0.2, 18,064 rows, exact byte count and SHA256; the fetch script verifies or prints recovery steps and never substitutes the online 2026 edition, which is different data rather than a newer snapshot of the same corpus. `llama` pins exact bytes and SHA256 for its three used assets: `b10472`/`b10595` are CUDA 13.3, `b11681` is CUDA 13.4, the builds are llama.cpp (ggml-org) nightlies rather than Meta's Llama weights, the CPU alternative's readout is recorded as unverified, and every URL is listed in `casestudy/llama/DOWNLOAD.md`.
+
 ## Workflow
 
 Full six steps, gate-error lookup table, common ways to die, case-study conventions → read **references/writing-claims.md** → only the skeleton stays here:
@@ -105,6 +109,10 @@ Full six steps, gate-error lookup table, common ways to die, case-study conventi
 It has fired in real iterations: one SKILL rewrite blinded 13 catalog items at once while the four quadrants returned the same readout as before, and that was read as "verification passed". **The mechanism holds every time; it is not a one-off lesson** — the record is in `CHANGELOG.md`.
 
 Before compare, `require_covered(changed_markers, covered_markers, what="…")` raises `CoverageError` with the gaps: fold into the space, or exempt explicitly. `scripts/coverage_guard.py` checks verbatim markers only (better to under-report than to falsely claim coverage); exemptions and `PREFIX:` relaxations are verbatim; it raises rather than warns. **A gate can itself fail silently in three tiers** — `coverage_guard_test.py` pins that with mutation evidence.
+
+**At the report layer the zero shape is stated, not left to the reader.** `compare`/`compare_n` keep returning — the delivery gate and the forgery PoC read the counts — but when nothing entered the comparison map the report cannot be read as a four-quadrant finding. `DiffResult` and `NWayResult` expose `domain_total` (every parameter point handed over, skips included) and `in_domain` (points that entered the quadrant or shape map); `render`/`render_n` open with a zero-domain banner, and `render_n` separates an empty parameter domain from an all-out-of-domain one because the two need different fixes. `verdict()` words the zero domain as no comparison having happened and the all-false shape as equivalence on a double negative, while `verdict_key()` stays `disjoint` — the machine key is a cross-language contract and does not move. A capped witness list is a sample, not a column count: the report says how many entries it did not list.
+
+**The same rule reaches exemptions and the ratio.** A `PREFIX:` whose suffix is blank — empty, spaces, tabs, full-width space — raises `ValueError` instead of exempting every marker, because an empty prefix matches all of them; the delivery gate refuses the same declaration and normalizes prefixes on both sides, so the two gates cannot drift apart on what a declared prefix covers. `coverage_ratio` counts each distinct changed item once (verbatim, order-preserving) before taking the denominator: a change listed twice is one change, not two.
 
 ### Forged PoC and capability declaration table: effective against sloppiness ≠ effective against deliberate forgery
 

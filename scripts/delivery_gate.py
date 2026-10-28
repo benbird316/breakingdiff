@@ -69,7 +69,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from breakingdiff import Claim, compare, render
-from coverage_guard import CoverageError, require_covered
+from coverage_guard import CoverageError, _norm, require_covered
 
 
 class DeliveryError(ValueError):
@@ -146,18 +146,43 @@ def require_change_coverage(changed_files: Sequence[str],
     file_coverage — {filename: commitment items it touches}
     exempt        — files genuinely unrelated to this gate (verbatim equality; use PREFIX: to relax)
 
+    Matching rules. An exact exemption is verbatim equality: it names one path, so it
+    matches that path or nothing. A `PREFIX:` declaration is a pattern, so it is
+    normalized with the same `_norm` as coverage_guard (`_norm` on both sides): a prefix
+    means the same thing however whitespace / full-width spaces are spelled, and the two
+    gates cannot drift apart on what a declared prefix covers.
+    A `PREFIX:` whose normalized suffix is empty is refused (ValueError): an empty
+    prefix matches every file, so one blank declaration would silently switch the whole
+    file-level gate off while it still looks enabled.
+
     A file not registered in file_coverage → raise. This differs from "the file is
     registered but the item is not in the catalog": the former is a missing
     declaration, the latter a missing parameter space. Both block, but the wording
     differs.
     """
+    exempt_exact, exempt_prefix = set(), []
+    for e in exempt:
+        if not e.startswith("PREFIX:"):
+            exempt_exact.add(e)
+            continue
+        prefix = _norm(e[len("PREFIX:"):])
+        if not prefix:
+            raise ValueError(
+                f"[DG:EMPTY_PREFIX] [coverage gate] exemption {e!r} declares PREFIX: "
+                "with a blank prefix (empty, whitespace, or a full-width space).\n"
+                "  An empty prefix matches every changed file, so this declaration "
+                "would silently exempt the whole round.\n"
+                "  Write the prefix you mean after PREFIX: (it is normalized by "
+                "removing whitespace and full-width spaces).")
+        exempt_prefix.append(prefix)
+
     unknown = []
     for f in changed_files:
         if f in file_coverage:
             continue
-        if f in set(exempt):
+        if f in exempt_exact:
             continue
-        if any(e.startswith("PREFIX:") and f.startswith(e[7:]) for e in exempt):
+        if any(_norm(f).startswith(p) for p in exempt_prefix):
             continue
         unknown.append(f)
     if unknown:

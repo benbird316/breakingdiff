@@ -14,6 +14,11 @@ import os
 import sqlite3
 import sys
 
+# The Windows console defaults to GBK and the report uses glyphs outside that code
+# page. Switch to UTF-8 and downgrade unencodable characters so the script cannot
+# die with UnicodeEncodeError while printing its own warning.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # ★ Search upward for breakingdiff.py instead of hard-coding "how many levels up".
 #   A hard-coded depth silently turns into ModuleNotFoundError once this directory
@@ -36,6 +41,11 @@ _ROOT = _find_scripts_root()
 sys.path.insert(0, os.path.join(_ROOT, "scripts"))
 
 from breakingdiff import Claim, compare_n, render_n  # noqa: E402
+# ★ `fetch_data` is a sibling module. Put this directory on sys.path explicitly so
+#   the pin constants are importable however the file is loaded (running it directly
+#   already puts it there; a consumer that loads this file by path does not).
+sys.path.insert(0, _HERE)
+import fetch_data  # noqa: E402  # the pinned corpus identity and its verifier
 
 DB = os.path.join(_HERE, "pdg.sqlite")
 
@@ -67,8 +77,18 @@ def load_measurements(desc, limit=17):
     if not os.path.exists(DB) or os.path.getsize(DB) == 0:
         raise SystemExit(
             f"[FATAL] data file missing or empty: {DB}\n"
-            f"Run python fetch_data.py first to download (~7.6 MB; the server is slow)."
+            f"{fetch_data.recovery_text(DB)}"
         )
+    # ★ Corpus-version guard: this case pins PDG 2024. The 2026 edition is
+    #   different data (edition/schema/row count all differ), and swapping it in
+    #   silently changes the readout without any script raising. Structural checks
+    #   live on the read path; the full bytes + SHA256 check is in fetch_data.py.
+    try:
+        fetch_data.verify_sqlite(DB, check_sha256=False)
+    except fetch_data.PinError as e:
+        raise SystemExit(
+            f"[FATAL] corpus does not match the pinned identity; refusing to read:\n{e}\n"
+            f"       Run python fetch_data.py for verification/recovery steps.")
     con = sqlite3.connect(DB)
     rows = con.execute(
         """

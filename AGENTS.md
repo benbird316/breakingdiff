@@ -1,8 +1,9 @@
 # AGENTS.md — repository navigation
 
-This file is a map: it answers only "to change X, which file do I read and which
-command do I run" — it does not teach how. [SKILL.md](SKILL.md) is the source of
-truth for rules and usage; this file does not restate it.
+This file is a map. It answers "to change X, which file do I read and which
+command do I run" — it does not teach how. Two parts are **binding policy, not
+navigation**: the Gate just below and the source-of-truth rules further down.
+[SKILL.md](SKILL.md) is the source of truth for rules and usage; this file does not restate it.
 
 **Gate — before you write an assertion, verify one, or hand a batch to another agent, read
 [`ORCHESTRATION.md`](ORCHESTRATION.md) §2.5 and §3.** Those rules bind executors, not only
@@ -11,12 +12,14 @@ code. Everything below is navigation.
 
 ## Start here
 
-1. Decide whether the tool fits the task at hand → [SKILL.md](SKILL.md) "when to use, when not to use"
-2. Writing a new instance or a new Claim → [references/writing-claims.md](references/writing-claims.md)
-3. Before touching decision logic → [SKILL.md](SKILL.md) "mutation evidence" plus [README.md](README.md) "when changing this tool"
-4. Tracing a lesson or an incident end to end → [CHANGELOG.md](CHANGELOG.md)
-5. Not sure what a file is for → [INDEX.md](INDEX.md)
-6. About to write an assertion, verify one, or split one batch across agents → [ORCHESTRATION.md](ORCHESTRATION.md) §2.5 and §3 (see the gate above; this is not optional reading for executors)
+1. Decide whether the tool fits the task at hand → [SKILL.md](SKILL.md) "When to use, when not to"
+2. **Blind-test before writing anything.** Reading SKILL.md is not the same as being able to use it. Run the public blind-run task sheet named in [README.md](README.md) "Directory layout" on two materials first, then classify the result against the four failure shapes in its failure atlas. Organizer-side material (scoring tables, run notes) is not for the blind-run agent — reading it contaminates the round; if you have, say so. The order is: name the failure shape, then pick the case row that matches it, then write claims.
+3. Classify what you have in hand → [casestudy/README.md](casestudy/README.md): take the row whose first column matches, then read only that row's `TEACHING-*.md` or reference doc.
+4. Writing a new instance or a new Claim → [references/writing-claims.md](references/writing-claims.md)
+5. Before touching decision logic → [SKILL.md](SKILL.md) "mutation evidence" plus [README.md](README.md) "when changing this tool"
+6. Tracing a lesson or an incident end to end → [CHANGELOG.md](CHANGELOG.md)
+7. Not sure what a file is for → [INDEX.md](INDEX.md)
+8. About to write an assertion, verify one, or split one batch across agents → [ORCHESTRATION.md](ORCHESTRATION.md) §2.5 and §3 (see the gate above; this is not optional reading for executors)
 
 ## Repository map
 
@@ -27,6 +30,9 @@ code. Everything below is navigation.
 | Design rationale and how to run | `README.md` | first time taking over, or wondering why it looks like this |
 | Incident and mutation ledger | `CHANGELOG.md` | checking whether a defense line was ever proven, or tracing a decision |
 | Multi-agent orchestration rules | `ORCHESTRATION.md` | before writing or verifying an assertion, or handing work to another agent — binds executors, not only dispatchers |
+| Case studies (`casestudy/`) | `casestudy/README.md` | you have a real artifact and want the matching pit layer, or a worked instance to copy |
+| Runnable examples | `examples/value_type_fingerprint.py` | first contact with the engine; the other instances pair a script with a same-named test file |
+| Blind-run acceptance (public task sheet + failure atlas) | `README.md`, "Directory layout" | after SKILL.md and before writing any claim — to find out what was not learnable from the material; blind-run agent roles and types are in `ORCHESTRATION.md` §2.1 / §4.1 |
 | Six-step method for writing instances | `references/writing-claims.md` | before writing a new Claim |
 | Test alignment | `references/test-alignment.md` | reconciling "assertions vs spec claims" |
 | Receipt field contract | `references/receipt-format.md` | before producing or checking a receipt |
@@ -59,25 +65,29 @@ re-anchoring) are in the scripts/ table of `INDEX.md`.
   `CHANGELOG.md`, per-file navigation in `INDEX.md`.
 - `references/` articles never cross-link; the entry point is always SKILL.md
   and this file.
-- Every instance under `examples/` is self-contained: script, same-named test,
-  and corpus travel together; missing one means it cannot run.
+- Most instances under `examples/` pair a script with a same-named test file and their shared
+  fixtures; `examples/forgery_poc.py` is deliberately unpaired (it is consumed by
+  `scripts/delivery_gate_test.py`), and some examples are test/gate-only
+  (`examples/trigger_conditions_test.py`, `examples/casestudy_test.py`,
+  `examples/docaudit/test_docaudit.py`).
 - Every line here is treated as something an agent will read: test-assertion
   details and grading-side material locations do not belong here, and every
   path that appears must really exist.
-- This file only maps "item → location"; steps and workflows belong to
-  SKILL.md, and neither side copies the other's words.
+- This file maps "item → location" and the order to read things in; the method behind
+  each step lives in `SKILL.md` or `ORCHESTRATION.md`, and neither side copies the other's
+  words.
 
 ## Verification
 
 After changing decision logic, rerun everything, not only the file you touched:
 
-    python scripts/ci_gate.py               # every test (28 files)
+    python scripts/ci_gate.py               # every test the gate discovers
 
 `python scripts/ci_gate.py --list` shows what would run; `--only <substring>` narrows to
-one file or group while iterating. The gate discovers tests by name — a file counts if its
-name starts with `test_` or ends with `_test` — so a new test is covered without being
-registered: there is no second list to keep in sync, and a gate that ran nothing exits 2
-rather than reporting green.
+one file or group while iterating. The gate discovers tests by name — only `.py` files are
+considered, and one counts if its name starts with `test_` or ends with `_test` — so a new test
+is covered without being registered: there is no second list to keep in sync, and a gate that
+ran nothing exits 2 rather than reporting green.
 
 This is the same script the pre-commit hook and the GitHub workflow call, so local and CI
 runs execute the same set of files. Without a corpus a case-study test takes its

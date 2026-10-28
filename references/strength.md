@@ -67,7 +67,7 @@ does not move when the strength changes, the claim's strength is decorative.
 ## Worked case
 
 The measured staircase and the registered exits are in `casestudy/TEACHING-malecns.md`; the
+three error-mode fingerprints are frozen in that case's test.
 
 Re-run the ladder with `scripts/strength_calibration.py`; its test carries the malecns
 fixture (12 / 2,720 / 4,354 / 241) and skips with a named reason when the corpus is absent.
-three error-mode fingerprints are frozen in that case's test.

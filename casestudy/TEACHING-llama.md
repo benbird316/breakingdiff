@@ -6,12 +6,14 @@
 > Scripts:
 > - `llama/aligned.py` — how to take the values once the accounts are aligned
 > - `llama/misaligned.py` — the four failure modes of the **probe layer**, each with its measured readout
-> - `llama/test_aligned.py` — break it and it must go red (36 assertions)
+> - `llama/test_aligned.py` — break it and it must go red (45 assertions)
 > - `llama/official_ledger.json` — verbatim ledger of the official notes (the only source for the **Q account**)
-> - `llama/corpus_manifest.json` — artifact-side ledger (**measured record**, including asset names and corpus status)
-> - `llama/fetch_corpus.py` — downloads and unpacks the three official builds
+> - `llama/corpus_manifest.json` — artifact-side ledger (**measured record**, including exact asset bytes/SHA256 and corpus status)
+> - `llama/fetch_corpus.py` — downloads and unpacks the three official builds; `--links` prints the asset list
+> - `llama/DOWNLOAD.md` — the corpus asset list (URL/bytes/SHA256) and manual download steps
 >
-> Corpus: three builds from the official llama.cpp nightly releases
+> Corpus: **llama.cpp (ggml-org)** official nightly builds — not Meta's Llama model
+> weights; a `llama-b<number>/` directory is an inference engine, not a model.
 > b10472 (2026-08-17) / b10595 (2026-08-23) / b11681 (2026-10-16)
 >
 > ### Where the corpus comes from: run fetch_corpus.py
@@ -21,16 +23,26 @@
 >
 > ```bash
 > cd llama
-> python fetch_corpus.py            # download + unpack into this directory, about 450 MB of traffic
+> python fetch_corpus.py            # download + unpack into this directory, 447,813,339 bytes (about 427 MiB)
+> python fetch_corpus.py --links    # print the asset URLs/bytes/SHA256 only; no download
 > ```
 >
-> Asset names are not written into the script; they are pinned in `asset_pins` in `corpus_manifest.json`.
+> Asset names, exact bytes and SHA256 are not written into the script; they are pinned in `asset_pins` in `corpus_manifest.json`.
 > This came out of an actual run: **b10472/b10595 are cuda-13.3, b11681 is cuda-13.4**
 > — the minor version changes over time, so hard-coding a generic "CUDA 13" points at a URL that does not exist,
 > and a failed download usually looks like a "network problem", which rarely makes you think of the version number.
+> The exact bytes matter for the same reason: the page shows "140 MB" as a 1024-based rounding, while
+> b10472's asset measured **146,707,438 bytes**, and only that number can tell whether a download is the same asset.
+> Every zip is checked against bytes + SHA256 before unpacking; a mismatch deletes the bad file and refuses to unpack.
 >
-> To save bandwidth you can use `--asset cpu` (18 MB each, 8 times smaller than the cuda build),
-> but **nobody has verified that the cpu build gives the same probe readout as the cuda build** — check it yourself before relying on it.
+> CUDA has two layers of evidence of different strength: the "CUDA 13 family" is **inferred from the DLLs shipped
+> inside the artifacts** (`cublas64_13.dll` / `ggml-cuda.dll`); the exact minor version is anchored by the
+> official release asset name. Writing only "Windows x64 (CUDA 13)" loses the distinction — and that is exactly
+> how the wrong asset gets downloaded.
+>
+> To save bandwidth you can use `--asset cpu` (17.3–18.7 MiB each, 8 times smaller than the cuda build),
+> but **nobody has verified that the cpu build gives the same probe readout as the cuda build** — every cpu
+> asset in the ledger is marked `readings_unverified: true`; check it yourself before relying on it.
 >
 > ### ★ Corpus status: b10472 / b10595 have been deleted
 >
@@ -53,7 +65,7 @@
 >
 > python aligned.py
 > python misaligned.py
-> python test_aligned.py      # 36 assertions (all green when the corpus is complete; the relevant ones skip when it is missing)
+> python test_aligned.py      # 45 assertions (all green when the corpus is complete; the relevant ones skip when it is missing)
 > ```
 >
 > `python aligned.py --llama-root <path>` is also supported,
@@ -413,7 +425,7 @@ to keep it from coming back.
 
 ---
 
-## 6. Mutation evidence: 36 items, all green
+## 6. Mutation evidence: 45 items, all green
 
 Covers **both directions of breakage** (a hard discipline in this project: a passing positive run proves nothing):
 
@@ -439,6 +451,10 @@ Covers **both directions of breakage** (a hard discipline in this project: a pas
 | relocatable | `_ROOT` must not hard-code a number of parent levels | must still run after the directory moves |
 | ledger | `corpus_manifest` covers all three builds | artifact-side facts can be checked |
 | ledger | asset names must contain the real CUDA minor version | stops downloads from a nonexistent URL |
+| ledger | every used asset has exact bytes + SHA256 | a download can be checked against the same asset |
+| ledger | `verify_asset` checks bytes first, then SHA256 | a half zip / a same-size zip with swapped bytes must be rejected |
+| ledger | the CPU build is marked `readings_unverified` | an unverified readout must not impersonate an equivalent one |
+| ledger | `_what_this_is` says llama.cpp nightly, not a Meta model | stops the directory name from misleading |
 | ledger | the ledger must say of itself "does not replace re-running the probes" | stops it being taken as the evidence itself |
 | ledger | corpus status must be recorded honestly and self-consistently | ★ a gap must not be worked around |
 | ledger | the C3 verdict direction matches the core finding | stops ledger and conclusion drifting apart |
@@ -575,7 +591,7 @@ The handling is written into `corpus_status` in `corpus_manifest.json`:
   "reason": "the two older builds were deleted after the verification run passed",
   "impact": "★ **the cross-version conclusion cannot be re-run**. The disappearance of template-analysis is a cross-version comparison (present in b10472/b10595 → absent in b11681); with only after and no before, the `C3` account loses its comparison object.",
   "recoverable": true,
-  "how": "python fetch_corpus.py (re-download from the official release, see asset_pins)"
+  "how": "python fetch_corpus.py (re-download from the official release, see asset_pins; each zip is checked against its exact bytes + SHA256 before unpacking)"
 }
 ```
 

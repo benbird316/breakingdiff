@@ -1,39 +1,79 @@
 {
   "_about": "Artifact-side ledger: what each build 'contains, how big it is, what the probes read'. Pairs with official_ledger.json (the official-account side).",
+  "_what_this_is": "The corpus is the official nightly builds of **llama.cpp (ggml-org)** — b10472 / b10595 / b11681. These are inference-engine binaries, **not Meta's Llama model weights**; the llama-b<number>/ directory name easily suggests a model, but the case is about engine binaries.",
   "_why_this_file_exists": "This case's corpus is 713 MB × 3 = 2.1 GB of official binaries; it cannot go into git and cannot be distributed with the repository. So the **measured artifact-side facts** are pinned here: even a reader without the corpus can check 'the readout I see matches what you recorded'.",
   "_honesty_boundary": "★ This file is a **measured record**, not the evidence itself. It lets a reader check readout consistency, but **it cannot replace re-running the probes** — only a run against the real binaries counts as verification. That is why fetch_corpus.py has to exist: if you can re-download, do not trust this ledger alone.",
   "_generated_by": "fetch_corpus.py --manifest (rescans the real builds and overwrites this file)",
-  "_platform_observed": "Windows x64, CUDA 13 (inferred from cublas64_13.dll / ggml-cuda.dll inside the artifact, not stated in any document)",
+  "_platform_observed": "Windows x64; CUDA 13 family (major 13 inferred from the cublas64_13.dll / ggml-cuda.dll shipped inside the artifacts, not stated in any document). ★ The exact minor version differs per build: b10472/b10595 = cuda-13.3, b11681 = cuda-13.4 — pin the official release asset names, do not write a vague 'CUDA 13'.",
+  "_cuda_evidence": "The major version 13 is inferred from the shipped DLLs; the minor 13.3/13.4 is pinned by the official release asset names (llama-b<tag>-bin-win-cuda-<minor>-x64.zip) checked against GitHub metadata. These are evidence of different strength: the DLL only proves 'this family', the minor version is anchored by the asset name.",
+  "_pin_source": "GitHub release asset metadata (collected 2026-10-28): sha256 digests from the releases/expanded_assets/<tag> page plus the Content-Length of a HEAD request to each asset download URL. ★ The 450 MB corpus was not downloaded; byte counts are measured HEAD values, not the page's rounded display (the page shows 146,707,438 as 140 MB).",
+  "_pin_api_fallback": "The REST API (api.github.com/.../releases/tags/<tag>) returned 403 rate limit at the time, so digests were taken from the sha256 badges in the GitHub release page's expanded_assets fragment (aria-label='Copy to clipboard digest'), and byte counts from the HEAD Content-Length of the download URLs. Both are GitHub server-side metadata; no archive was downloaded.",
 
   "asset_pins": {
-    "_about": "Official release asset names. ★ Measured: b10472/b10595 are cuda-13.3, b11681 is cuda-13.4 — **the minor version differs within the same 'CUDA 13' family**; do not write a vague 'CUDA 13'.",
+    "_about": "Official release asset names + exact bytes + SHA256. ★ Measured: b10472/b10595 are cuda-13.3, b11681 is cuda-13.4 — **the minor version differs within the same 'CUDA 13' family**; never write a vague 'CUDA 13'.",
     "_api": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/<tag>",
     "_download_pattern": "https://github.com/ggml-org/llama.cpp/releases/download/<tag>/<asset>",
+    "_verification": "After download, fetch_corpus.py checks used_asset_bytes + used_asset_sha256; a mismatch refuses to unpack. An existing bad file is removed and re-downloaded.",
+    "_total_used_asset_bytes": 447813339,
+    "_total_used_asset_note": "The three cuda assets total 447,813,339 bytes (about 448 MB / 427 MiB). With `--asset cpu` the total is 56,172,043 bytes (about 56 MB / 54 MiB), but the cpu readout is unverified.",
     "b10472": {
       "published_at": "2026-08-17T17:16:25Z",
       "used_asset": "llama-b10472-bin-win-cuda-13.3-x64.zip",
-      "used_asset_size_mb": 147,
+      "used_asset_bytes": 146707438,
+      "used_asset_sha256": "ce7ca842c1400a85457e6c7ce844f21e52f187e6f0364b7daf3d2fd1ccf6db3b",
       "alternatives": {
-        "cpu": "llama-b10472-bin-win-cpu-x64.zip (18MB)",
-        "cuda-12.4": "llama-b10472-bin-win-cuda-12.4-x64.zip (251MB)"
+        "cpu": {
+          "asset": "llama-b10472-bin-win-cpu-x64.zip",
+          "bytes": 18470168,
+          "sha256": "ef495329c85c171991972fd3226a179c1900368cab66e2ebba8b21a7471a74e5",
+          "readings_unverified": true,
+          "note": "★ CPU build readings are unverified: the probe readout was measured on the cuda build, and the cpu build may trim the relevant symbols"
+        },
+        "cuda-12.4": {
+          "asset": "llama-b10472-bin-win-cuda-12.4-x64.zip",
+          "bytes": 250798945,
+          "sha256": "aadc171ddb4ed1822bc1730bff447068b529718cef886437866e3bd536eda143"
+        }
       }
     },
     "b10595": {
       "published_at": "2026-08-23T13:44:15Z",
       "used_asset": "llama-b10595-bin-win-cuda-13.3-x64.zip",
-      "used_asset_size_mb": 146,
+      "used_asset_bytes": 146496057,
+      "used_asset_sha256": "20a73e56341dd43aaf9d3f53daad14e1bd362eac6ad5b3a31f36854aa9340889",
       "alternatives": {
-        "cpu": "llama-b10595-bin-win-cpu-x64.zip (18MB)",
-        "cuda-12.4": "llama-b10595-bin-win-cuda-12.4-x64.zip (251MB)"
+        "cpu": {
+          "asset": "llama-b10595-bin-win-cpu-x64.zip",
+          "bytes": 18136128,
+          "sha256": "b217d938baa442aac2808c0cb4b440fbd74882cc19ec8c2d3105e6c1d9cac4a8",
+          "readings_unverified": true,
+          "note": "★ CPU build readings are unverified: the probe readout was measured on the cuda build, and the cpu build may trim the relevant symbols"
+        },
+        "cuda-12.4": {
+          "asset": "llama-b10595-bin-win-cuda-12.4-x64.zip",
+          "bytes": 250534432,
+          "sha256": "ba4204aa8a04f752e605dcefda77ba553c75e0e2c2c8cdab2597a7ac22570167"
+        }
       }
     },
     "b11681": {
       "published_at": "2026-10-16T05:47:38Z",
       "used_asset": "llama-b11681-bin-win-cuda-13.4-x64.zip",
-      "used_asset_size_mb": 155,
+      "used_asset_bytes": 154609844,
+      "used_asset_sha256": "56e2f75b9ce69952b613ea95c6d54f4bf30c7261f4cda1ae954c7bcad3a114e5",
       "alternatives": {
-        "cpu": "llama-b11681-bin-win-cpu-x64.zip (20MB)",
-        "cuda-12.4": "llama-b11681-bin-win-cuda-12.4-x64.zip (267MB)"
+        "cpu": {
+          "asset": "llama-b11681-bin-win-cpu-x64.zip",
+          "bytes": 19565747,
+          "sha256": "07006066db26ba20863785ec8fdd55028226c8eafcdb8db5a1484e98ebf01676",
+          "readings_unverified": true,
+          "note": "★ CPU build readings are unverified: the probe readout was measured on the cuda build, and the cpu build may trim the relevant symbols"
+        },
+        "cuda-12.4": {
+          "asset": "llama-b11681-bin-win-cuda-12.4-x64.zip",
+          "bytes": 266609470,
+          "sha256": "c3b9605f70f53beafd1a36fa360d32a22f8d5a0c6dcb1276f2d8b69a3db777ca"
+        }
       }
     }
   },
@@ -47,7 +87,7 @@
     "reason": "the two older builds were deleted after the verification run passed",
     "impact": "★ **the cross-version conclusion cannot be re-run**. The disappearance of template-analysis is a cross-version comparison (present in b10472/b10595 → absent in b11681); with only after and no before, the `C3` account loses its comparison object.",
     "recoverable": true,
-    "how": "python fetch_corpus.py (re-download from the official release, see asset_pins)",
+    "how": "python fetch_corpus.py (re-download from the official release, see asset_pins; each zip is checked against its exact bytes + SHA256 before unpacking)",
     "_why_record_this": "A discipline of this project: **a missing corpus must be recorded, not worked around**. This entry is itself teaching material for the case — it shows what to leave behind when 'the build is gone'. Without it, later readers would assume all three builds were always there, and when a re-run produces no conclusion they would not know what to blame."
   },
 

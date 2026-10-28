@@ -12,9 +12,13 @@ and that assertion must cover **both directions of breakage**:
 
 How to run: python test_aligned.py
 """
+import contextlib
+import io
 import os
+import shutil
 import sqlite3
 import sys
+import tempfile
 import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -40,11 +44,45 @@ sys.path.insert(0, os.path.join(_ROOT, "scripts"))
 sys.path.insert(0, _HERE)
 
 import aligned  # noqa: E402
+import fetch_data  # noqa: E402  # the pinned corpus identity and its verifier
 import misaligned  # noqa: E402
 from breakingdiff import Claim, ProvenanceError  # noqa: E402
 
 DB = os.path.join(_HERE, "pdg.sqlite")
 HAS_DB = os.path.exists(DB)
+
+
+def _make_fake_pdg_sqlite(path, *, edition="2024",
+                          schema=fetch_data.PINNED_SCHEMA_VERSION,
+                          rows=fetch_data.PINNED_PDGDATA_ROWS,
+                          citation=fetch_data.PINNED_CITATION):
+    """Build a **structurally valid but parameterized-wrong** fake PDG sqlite.
+
+    The real corpus is not copied: each pinned check (edition / schema / rows /
+    citation) must be breakable on its own, otherwise the corresponding assertion
+    has no proven discriminating power.
+    """
+    con = sqlite3.connect(path)
+    try:
+        con.execute("CREATE TABLE pdginfo ("
+                    "id INTEGER PRIMARY KEY, name VARCHAR(30), value VARCHAR(255))")
+        con.execute("CREATE TABLE pdgdata (pdgid TEXT)")
+        meta = {
+            "producer": "Particle Data Group (PDG)",
+            "status": "production",
+            "schema_version": schema,
+            "edition": edition,
+            "citation": citation,
+            "license": "CC BY 4.0",
+        }
+        con.executemany(
+            "INSERT INTO pdginfo (name, value) VALUES (?, ?)", list(meta.items()))
+        con.executemany("INSERT INTO pdgdata (pdgid) VALUES (?)",
+                        [("fake",)] * rows)
+        con.commit()
+    finally:
+        con.close()
+    return path
 
 
 def total_summary(r):
@@ -472,6 +510,168 @@ class TestNoDataGuard(unittest.TestCase):
             aligned.DB = saved
             if os.path.exists(ghost):
                 os.remove(ghost)
+
+
+class TestDataPin(unittest.TestCase):
+    """★ The corpus is pinned to PDG 2024: a wrong edition / wrong rows / tampered
+    bytes must all go red.
+
+    Background: the upstream online edition is now 2026 (edition=2026 / schema 0.3 /
+    19,587 rows / about 25.75 MB), which is not the same data as the in-repo 2024
+    corpus. If the fetch script still downloaded by URL, or if the verifier let a
+    wrong edition through, every readout in this case would silently become another
+    corpus's readout — exactly the "failure that raises nothing" this case teaches.
+    So what is pinned must have assertions.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bd_pdgpin_")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def _fake(self, **kw):
+        p = os.path.join(self.tmp, "pdg.sqlite")
+        if os.path.exists(p):
+            os.remove(p)
+        return _make_fake_pdg_sqlite(p, **kw)
+
+    # ---------- the pinned constants themselves ----------
+
+    def test_pinned_constants_are_the_documented_facts(self):
+        """★ The edition/citation/schema/size/bytes the docs state must equal the code constants."""
+        self.assertEqual(fetch_data.PINNED_EDITION, "2024")
+        self.assertEqual(fetch_data.PINNED_SCHEMA_VERSION, "0.2")
+        self.assertEqual(fetch_data.PINNED_PDGDATA_ROWS, 18064)
+        self.assertEqual(fetch_data.PINNED_BYTES, 7593984)
+        self.assertEqual(len(fetch_data.PINNED_SHA256), 64)
+        self.assertIn("Phys. Rev. D 110, 030001", fetch_data.PINNED_CITATION)
+        self.assertIn("2024", fetch_data.PINNED_CITATION)
+
+    # ---------- the real corpus: every pinned fact must be equal ----------
+
+    @unittest.skipUnless(HAS_DB, "missing pdg.sqlite; run fetch_data.py to verify/recover")
+    def test_real_db_matches_every_pinned_fact(self):
+        """★ If the in-repo corpus is swapped to the 2026 edition (or edited), this must go red."""
+        facts = fetch_data.verify_sqlite(DB)
+        self.assertEqual(facts["edition"], fetch_data.PINNED_EDITION)
+        self.assertEqual(facts["schema_version"],
+                         fetch_data.PINNED_SCHEMA_VERSION)
+        self.assertEqual(facts["pdgdata_rows"], fetch_data.PINNED_PDGDATA_ROWS)
+        self.assertEqual(facts["citation"], fetch_data.PINNED_CITATION)
+        self.assertEqual(facts["bytes"], fetch_data.PINNED_BYTES)
+        self.assertEqual(facts["sha256"], fetch_data.PINNED_SHA256)
+
+    @unittest.skipUnless(HAS_DB, "missing pdg.sqlite")
+    def test_main_accepts_the_pinned_file(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            fetch_data.main(["--path", DB])
+        text = out.getvalue()
+        self.assertIn("2024", text)
+        self.assertIn(fetch_data.PINNED_SHA256, text)
+
+    # ---------- forged wrong editions: each must go red ----------
+
+    def test_wrong_edition_is_red(self):
+        """★ Core mutation: switch edition to the upstream 2026 → must raise."""
+        p = self._fake(edition="2026", schema="0.3", rows=19587)
+        with self.assertRaises(fetch_data.PinError) as cm:
+            fetch_data.verify_sqlite(p)
+        msg = str(cm.exception)
+        self.assertIn("edition", msg)
+        self.assertIn("2024", msg, "the error must state that this case pins 2024")
+
+    def test_wrong_schema_version_is_red(self):
+        p = self._fake(schema="0.3")
+        with self.assertRaises(fetch_data.PinError) as cm:
+            fetch_data.verify_sqlite(p)
+        self.assertIn("schema_version", str(cm.exception))
+
+    def test_wrong_row_count_is_red(self):
+        """★ Changing only the row count, with everything else right, must also go red —
+        otherwise "different data but same structure name" slips through."""
+        p = self._fake(rows=19587)
+        with self.assertRaises(fetch_data.PinError) as cm:
+            fetch_data.verify_sqlite(p)
+        self.assertIn("row count", str(cm.exception))
+
+    def test_citation_drift_is_red(self):
+        p = self._fake(citation="S. Navas et al. (PDG), Phys. Rev. D 111, 030001 (2025)")
+        with self.assertRaises(fetch_data.PinError) as cm:
+            fetch_data.verify_sqlite(p)
+        self.assertIn("citation", str(cm.exception))
+
+    def test_tampered_bytes_are_caught_by_sha256_not_only_size(self):
+        """★ Structure all right and bytes padded to the pinned size, yet SHA256 must stop it.
+
+        This one specifically guards against "verification only looks at size/rows":
+        after padding the file to PINNED_BYTES, size and row count both match; only
+        SHA256 can detect that the content was changed.
+        """
+        p = self._fake()
+        size = os.path.getsize(p)
+        self.assertLess(size, fetch_data.PINNED_BYTES)
+        with open(p, "ab") as f:
+            f.write(b"\0" * (fetch_data.PINNED_BYTES - size))
+        self.assertEqual(os.path.getsize(p), fetch_data.PINNED_BYTES)
+        with self.assertRaises(fetch_data.PinError) as cm:
+            fetch_data.verify_sqlite(p)
+        self.assertIn("SHA256", str(cm.exception))
+
+    # ---------- missing: recovery guidance, never a silent download ----------
+
+    def test_missing_file_exits_with_recovery_not_download(self):
+        ghost = os.path.join(self.tmp, "__no_such__.sqlite")
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            with self.assertRaises(SystemExit) as cm:
+                fetch_data.main(["--path", ghost])
+        self.assertEqual(cm.exception.code, 1)
+        text = out.getvalue() + err.getvalue()
+        self.assertIn("2024", text, "the recovery text must name the pinned 2024 edition")
+        self.assertIn("SHA256", text, "the recovery text must give the SHA256 anchor")
+        self.assertIn("Recovery", text, "a missing file must say how to recover")
+        self.assertFalse(os.path.exists(ghost),
+                         "★ must not create an empty database while checking, and must not "
+                         "silently download a substitute edition")
+
+    def test_fetch_script_has_no_download_path(self):
+        """★ Structural assertion: the fetch script must contain no network download mechanism.
+
+        A human convention "do not download 2026" is not enough — as long as a download
+        path exists, the next person will trigger it.
+        """
+        with open(os.path.join(_HERE, "fetch_data.py"), encoding="utf-8") as f:
+            src = f.read()
+        for forbidden in ("http://", "https://", "urllib", "requests",
+                          "curl", "wget", "os.system", "subprocess"):
+            self.assertNotIn(forbidden, src,
+                             f"fetch_data.py must contain no download mechanism: {forbidden!r}; "
+                             f"this case pins 2024 and only gives recovery steps when it is missing")
+
+    # ---------- the same guard on the read path ----------
+
+    def test_aligned_rejects_wrong_edition(self):
+        """★ Even bypassing fetch_data and running aligned.py directly must be blocked."""
+        p = self._fake(edition="2026", schema="0.3", rows=19587)
+        saved = aligned.DB
+        try:
+            aligned.DB = p
+            with self.assertRaises(SystemExit) as cm:
+                aligned.load_measurements(aligned.TARGET_DESC)
+            self.assertIn("2024", str(cm.exception))
+        finally:
+            aligned.DB = saved
+
+    def test_misaligned_rejects_wrong_edition(self):
+        p = self._fake(edition="2026", schema="0.3", rows=19587)
+        saved = misaligned.DB
+        try:
+            misaligned.DB = p
+            with self.assertRaises(SystemExit) as cm:
+                misaligned._con()
+            self.assertIn("2024", str(cm.exception))
+        finally:
+            misaligned.DB = saved
 
 
 if __name__ == "__main__":

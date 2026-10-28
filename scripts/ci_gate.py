@@ -49,12 +49,15 @@ into a count. The caller decides what a failure means.
 
 ## What CI can and cannot cover (measured, not assumed)
 
-The corpora are gitignored and fetched on demand — 56MB of Feather,
-6MB of OpenAPI snapshots, the 7MB PDG sqlite, the 2.1GB llama.cpp archive — so
-a fresh checkout has none of them. The case-study tests degrade to their
-no-corpus path instead of failing: 27/27 green on a corpus-free tree with
-pyarrow installed (2026-10-22). pyarrow itself is the one third-party package
-the suite touches, and only in `casestudy/malecns/test_aligned.py`.
+Most corpora are gitignored and fetched on demand — 56MB of Feather, 6MB of
+OpenAPI snapshots, the 2.1GB llama.cpp archive — so a fresh checkout has none
+of them; the 7.2MB PDG 2024 sqlite is the one corpus that ships in the
+repository. The case-study tests degrade to their no-corpus path instead of
+failing: measured 2026-10-29, 29/29 green in this working tree with the pdg,
+k8s and malecns corpora present and the llama archive absent (its 16
+corpus-anchored items take the skip path), pyarrow installed. pyarrow itself is
+the one third-party package the suite touches, and only in
+`casestudy/malecns/test_aligned.py`.
 
 So on every push this gate proves the code-level surface. The corpus-anchored
 assertions only run where the corpus was fetched, which on CI means never. That

@@ -1,12 +1,12 @@
-// 移植层案例：Rust 实现（零 crate —— 自带只认本 schema 的最小 JSON 解析器）。
+// Port-layer case: Rust implementation (zero crates -- ships its own minimal JSON parser that only understands this schema).
 //
-// 仓库纪律是「无第三方依赖」。claims.json 的结构足够小，所以这里手写解析
-// 而不是引 serde_json：**契约小的时候，零依赖是选项**——这本身就是教学点。
+// The repository rule is "no third-party dependencies". claims.json is small enough, so the parser here is
+// hand-written instead of pulling in serde_json: **when the contract is small, zero dependencies is an option** -- and that is itself a teaching point.
 //
-// 用法：
+// Usage:
 //   rustc -O main.rs -o port_rust.exe
 //   .\port_rust.exe --spec ../../claims.json
-//   .\port_rust.exe --spec ../../claims.json --mutant boundary   # 错移植：ge 写成 gt
+//   .\port_rust.exe --spec ../../claims.json --mutant boundary   # wrong port: ge written as gt
 use std::env;
 use std::fs;
 use std::process::exit;
@@ -220,7 +220,7 @@ fn eval_op(op: &Value, point: &Value, mutate_boundary: bool) -> bool {
     match kind {
         "ge" => {
             let v = as_i64(get(op, "value"));
-            // 错移植：边界差一。与 Go 侧同名 mutant，读数可对拍。
+            // Wrong port: off-by-one boundary. Same mutant name as the Go side, so the readouts can be reconciled point by point.
             if mutate_boundary {
                 x > v
             } else {
@@ -309,7 +309,7 @@ fn main() {
         let mut dw: Vec<i64> = Vec::new();
 
         for point in domain {
-            // 域外判定不参与 mutant：错移植只错在判定面。
+            // The out-of-domain decision does not take the mutant: the wrong port errs only in the predicate surface.
             if !eval_op(p_applies, point, false) || !eval_op(q_applies, point, false) {
                 out_of_domain += 1;
                 continue;

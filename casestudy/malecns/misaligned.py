@@ -18,6 +18,11 @@ How to run: python misaligned.py
 import os
 import sys
 
+# The Windows console defaults to GBK and the report uses glyphs outside that code
+# page. Switch to UTF-8 and downgrade unencodable characters so the script cannot
+# die with UnicodeEncodeError while printing its own warning.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # ★ Search upward for breakingdiff.py (same reason as pdg/misaligned.py: move the directory
 #   and a hard-coded depth silently becomes ModuleNotFoundError).

@@ -151,6 +151,7 @@ class DiffResult:
     dominance: int = 0
     neither: int = 0
     out_of_domain: int = 0
+    domain_total: int = 0   # every parameter point the caller handed over, skips included
     divergence_witnesses: List[Any] = field(default_factory=list)
     dominance_witnesses: List[Any] = field(default_factory=list)
     max_witness: int = 8
@@ -158,6 +159,18 @@ class DiffResult:
     @property
     def total(self) -> int:
         return self.common + self.divergence + self.dominance + self.neither
+
+    @property
+    def in_domain(self) -> int:
+        """Points that actually entered the four quadrants (= total).
+
+        A zero `in_domain` means nothing was compared; `domain_total` tells
+        "the caller passed an empty domain" (domain_total 0) apart from "every
+        point was skipped by one side's applies()" (domain_total > 0). Without
+        both, a 0/0/0/0 readout is indistinguishable from a real four-quadrant
+        result and reads as "no divergence".
+        """
+        return self.total
 
     def pct(self, n: int) -> float:
         return 100.0 * n / self.total if self.total else 0.0
@@ -184,6 +197,7 @@ def compare(P: Claim, Q: Claim, domain: Iterable[Any],
     _guard(Q)
     r = DiffResult(P.name, Q.name, max_witness=max_witness)
     for x in domain:
+        r.domain_total += 1
         if not (P.applies(x) and Q.applies(x)):
             r.out_of_domain += 1
             continue
@@ -225,7 +239,20 @@ def verdict_key(r: DiffResult) -> str:
 
 
 def verdict(r: DiffResult, P: Claim, Q: Claim) -> str:
-    """Human-readable verdict text. The criterion lives in verdict_key; this is presentation only."""
+    """Human-readable verdict text. The criterion lives in verdict_key; this is presentation only.
+
+    Two zero shapes share the "disjoint" key but are not the same finding, so the
+    wording separates them before the key dispatch:
+      · in_domain == 0 — nothing was compared at all; there is no verdict to state,
+        and "disjoint over the comparison domain" would claim a comparison happened;
+      · neither == total — P and Q are both false on every valid point: they agree,
+        on "no". That is a double negative, not a divergence.
+    """
+    if r.in_domain == 0:
+        return (f"No valid comparison points: domain {r.domain_total} point(s), "
+                f"0 entering the quadrant map (out-of-domain {r.out_of_domain})")
+    if r.neither == r.total:
+        return "Equivalent over the comparison domain (double negative)"
     key = verdict_key(r)
     if key == "p_strict_contains_q":
         return f"{P.name} strictly contains {Q.name}"
@@ -274,6 +301,14 @@ def render(P: Claim, Q: Claim, r: DiffResult, *,
     add(f"breakingdiff report  |  {P.name}   vs   {Q.name}")
     add(BAR)
 
+    # Top banner: a 0/0/0/0 report is not a four-quadrant finding. The counts below
+    # stay in place so the shape is still inspectable, but nothing above the fold may
+    # read as an ordinary comparison.
+    if r.in_domain == 0:
+        add(f"⚠️ zero valid comparison points: domain {r.domain_total} points, "
+            f"0 entering the quadrant map (out-of-domain {r.out_of_domain})")
+        add("")
+
     add("[Provenance binding]")
     for lab, C in ((p_label, P), (q_label, Q)):
         add(f"  {lab} source: {C.source}")
@@ -312,8 +347,13 @@ def render(P: Claim, Q: Claim, r: DiffResult, *,
 
     add("")
     add("[Witnesses]")
-    add(f"  divergence witnesses: " + (" ".join(map(str, r.divergence_witnesses)) or "(none)"))
-    add(f"  dominance witnesses: " + (" ".join(map(str, r.dominance_witnesses)) or "(none)"))
+    # A capped witness list is a sample, not the count: without the remainder line the
+    # report reads as "only N points fall in this column".
+    for label, shown, total in (("divergence", r.divergence_witnesses, r.divergence),
+                                ("dominance", r.dominance_witnesses, r.dominance)):
+        add(f"  {label} witnesses: " + (" ".join(map(str, shown)) or "(none)"))
+        if total > len(shown):
+            add(f"      … first {len(shown)} of {total}, {total - len(shown)} not listed")
 
     if r.divergence:
         add("")
@@ -352,8 +392,19 @@ class NWayResult:
     anchor_name: Optional[str] = None
     out_of_domain: int = 0
     total: int = 0
+    domain_total: int = 0   # every parameter point the caller handed over, skips included
     anchor: Optional[int] = None
     max_witness: int = 8
+
+    @property
+    def in_domain(self) -> int:
+        """Points that actually entered the shape statistics (= total).
+
+        Same distinction as DiffResult.in_domain: zero here means no account was
+        compared, and domain_total says whether the domain was empty or entirely
+        outside every account's applies().
+        """
+        return self.total
 
     def pct(self, n: int) -> float:
         return 100.0 * n / self.total if self.total else 0.0
@@ -414,6 +465,7 @@ def compare_n(claims: List[Claim], domain: Iterable[Any], *,
     seen = [] if chain else None          # the ratchet check looks back at verdict vectors, so chain mode keeps them
     n = len(claims)
     for x in domain:
+        r.domain_total += 1
         if not all(c.applies(x) for c in claims):
             r.out_of_domain += 1
             continue
@@ -449,6 +501,21 @@ def compare_n(claims: List[Claim], domain: Iterable[Any], *,
     return r
 
 
+def _nway_zero_domain_banner(r: NWayResult) -> str:
+    """The top banner for an N-account comparison with no valid points.
+
+    Two causes need different fixes, so they get different wording: an empty
+    parameter domain is the caller's input problem; an all-skipped domain means
+    the accounts' applies() share no point.
+    """
+    if r.domain_total == 0:
+        return ("⚠️ zero valid comparison points: the parameter domain is empty "
+                "(0 points iterated, 0 entering the shape map)")
+    return (f"⚠️ zero valid comparison points: domain {r.domain_total} points, "
+            f"0 entering the shape map (out-of-domain {r.out_of_domain}) — "
+            f"all {r.domain_total} point(s) fell out of domain")
+
+
 def render_n(claims: List[Claim], r: NWayResult, *,
              meaning_outlier: str = "outlier: this account is missing points all the other accounts cover (candidate suspect, not a verdict)",
              meaning_ratchet: str = "ratchet violation: the old version had it, the new version dropped it — a cross-version regression",
@@ -466,6 +533,12 @@ def render_n(claims: List[Claim], r: NWayResult, *,
     add(BAR)
     add(f"breakingdiff N-account report  |  {title}")
     add(BAR)
+
+    # Same top banner as the pairwise report: the shape table below stays visible as
+    # evidence, but a zero-domain readout must not pass for a shape finding.
+    if r.in_domain == 0:
+        add(_nway_zero_domain_banner(r))
+        add("")
 
     add("[Provenance binding]")
     for C in claims:
@@ -515,6 +588,9 @@ def render_n(claims: List[Claim], r: NWayResult, *,
                 add(f"      … {r.ratchet_total} total, showing the first {len(r.ratchet_witnesses)}")
         if r.split_witnesses:
             add("  split witnesses: " + " ".join(map(str, r.split_witnesses)))
+            if r.split > len(r.split_witnesses):
+                add(f"      … first {len(r.split_witnesses)} of {r.split}, "
+                    f"{r.split - len(r.split_witnesses)} not listed")
 
     if r.ratchet_total:
         add("")

@@ -6,8 +6,8 @@
 > Scripts:
 > - `pdg/aligned.py` — how to select when the accounts **are aligned**
 > - `pdg/misaligned.py` — four ways the accounts can be **misaligned**, each with its measured readout
-> - `pdg/test_aligned.py` — breaking the aligned sample must turn the tests red (22 assertions)
-> - `pdg/fetch_data.py` — downloads the data (about 7.6 MB; the server is slow, so run it once)
+> - `pdg/test_aligned.py` — breaking the aligned sample must turn the tests red (34 assertions)
+> - `pdg/fetch_data.py` — verifies/recovers the corpus (pinned PDG 2024, 7,593,984 bytes; **never downloads**)
 
 ★ The directory is movable: the scripts search **upward** for `scripts/breakingdiff.py`,
 they do not hard-code "how many levels up". This rule came out of an actual migration —
@@ -18,10 +18,10 @@ can afford is "it won't run somewhere else and you can't find out why". When the
 How to run it:
 ```
 cd pdg
-python fetch_data.py        # once
+python fetch_data.py        # verify the corpus identity (edition/schema/rows/bytes/SHA256; missing → recovery steps)
 python aligned.py
 python misaligned.py
-python test_aligned.py     # 22 assertions, all should be green
+python test_aligned.py     # 34 assertions, all should be green
 ```
 
 ---
@@ -56,6 +56,38 @@ That is close to the perfect shape for N accounts:
 
 The key property: **the criterion is anchored externally; this skill does not define it**.
 That sidesteps the self-justifying loop of setting your own question and answering it — the only reason this case study is worth doing.
+
+### 1.1 Corpus version: pin PDG 2024, do not drift with upstream
+
+Every readout in this case was measured on the **PDG 2024 sqlite that ships with the case**, and `fetch_data.py` pins that identity:
+
+| Field | Pinned value |
+|---|---|
+| edition | `2024` |
+| citation | S. Navas et al. (Particle Data Group), Phys. Rev. D 110, 030001 (2024) |
+| schema_version | `0.2` |
+| pdgdata rows | 18,064 |
+| file size | 7,593,984 bytes (about 7.59 MB / 7.24 MiB) |
+| SHA256 | `a925777f…fd532e` (full value in `fetch_data.py`) |
+
+`python fetch_data.py` performs **verification/recovery**, not download: if the file is
+present it checks every fact (edition / citation / schema / rows / bytes / SHA256) and
+exits non-zero on any mismatch; if it is missing it prints the recovery steps and the
+SHA256 anchor, then exits. `aligned.py` / `misaligned.py` run the same structural guard
+(edition/schema/citation/rows) before reading data, so bypassing `fetch_data.py` directly is
+still blocked.
+
+**Why not fetch 2026:** the online upstream edition is now 2026 (edition=2026, schema 0.3,
+19,587 pdgdata rows, about 25.75 MB), and the 2024/2025 URLs now return 404.
+2026 is not a new snapshot of this corpus; it is **different data** — the assertions and
+the 17-account table below were all measured on 2024. Silently swapping the corpus would
+swap the conclusions, and no script would raise. Migrating to 2026 is a **future item**:
+it has to change the assertions, the readout table and the teaching narrative together,
+which a fetch script cannot decide on its own.
+
+> The old doc's "about 7.6 MB" was once attached to the 2026 download URL and was wrong:
+> 7.6 MB is **this 2024 file**; the 2026 edition is about 25.75 MB. The numbers are now
+> the exact byte count plus both unit bases, so the two cannot be confused again.
 
 ---
 
@@ -266,7 +298,7 @@ The 17 accounts that come out:
 | B183RE | 2158 | 25 |
 | B184RE | 2234 | 25 |
 
-### Mutation evidence in `test_aligned.py`: 22 assertions, all green
+### Mutation evidence in `test_aligned.py`: 34 assertions, all green
 
 It covers **two directions of breakage** (a hard rule in this project: a passing positive run proves nothing):
 
@@ -281,6 +313,10 @@ It covers **two directions of breakage** (a hard rule in this project: a passing
 | Provenance | Inconsistent quote wording | Must raise `ProvenanceError` |
 | Provenance | quote missing a few digits of precision | Records the substring granularity limit (capability ceiling) |
 | Fingerprint | The 5 rows of the §4 fingerprint table + telling the three all-zero cases apart | The document table must not drift from the code |
+| Corpus pin | Forged edition=2026 / schema=0.3 / rows=19,587 / changed citation | Must raise `PinError`; a missing file only gets recovery steps, no 2026 download |
+| Corpus pin | Structure all right but content changed (bytes padded to the pinned size) | Must be caught by SHA256, not by size/row count alone |
+| Corpus pin | The fetch script must contain no network download mechanism | A human "don't download 2026" convention is not enough |
+| Corpus pin | `aligned.py` / `misaligned.py` must reject a wrong edition on the read path | Bypassing `fetch_data.py` is still blocked |
 | Portable | `_ROOT` must not hard-code the number of levels to walk up | Must still run after the directory moves |
 | Guard | Missing data / empty database | Must `SystemExit`; must not quietly run an empty report |
 

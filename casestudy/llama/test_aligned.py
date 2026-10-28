@@ -532,7 +532,7 @@ class TestCorpusManifest(unittest.TestCase):
 
     The Q account (official statements) is pinned in official_ledger.json;
     but the **artifact-side** facts — what each build has, how big it is, what the probes read —
-    used to live only in my chat log. That is not good enough: the reader cannot check it.
+    used to live only in one-off measurement notes (not kept in the repo). That is not good enough: the reader cannot check it.
 
     Hence corpus_manifest.json. Two disciplines:
       1) the ledger must not become "a record that never changes and may be out of date"
@@ -657,6 +657,133 @@ class TestCorpusManifest(unittest.TestCase):
         finally:
             import shutil
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestAssetPins(unittest.TestCase):
+    """★ Asset pins: exact bytes + SHA256, verified after download.
+
+    The manifest used to carry only rounded values like "about 147 MB" — that could
+    not tell whether the downloaded file was the same asset, let alone catch a
+    half-downloaded zip. Now every used asset has GitHub-metadata bytes and SHA256,
+    fetch_corpus.py checks them item by item after downloading, and the CPU build
+    is explicitly marked "readout unverified" (it may not impersonate an equivalent
+    readout).
+    """
+
+    MANIFEST = os.path.join(_HERE, "corpus_manifest.json")
+
+    def _man(self):
+        with open(self.MANIFEST, encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_every_used_asset_has_exact_bytes_and_sha256(self):
+        man = self._man()
+        total = 0
+        for tag in aligned.BUILDS:
+            pin = man["asset_pins"][tag]
+            self.assertIsInstance(pin["used_asset_bytes"], int,
+                                  f"{tag} must have an exact integer byte count, not just an approximation")
+            self.assertGreater(pin["used_asset_bytes"], 1_000_000)
+            self.assertRegex(pin["used_asset_sha256"], r"^[0-9a-f]{64}$",
+                             f"{tag} must have a 64-hex-digit SHA256")
+            self.assertNotIn("used_asset_size_mb", pin,
+                             "the rounded MB value must be replaced by the exact byte count")
+            total += pin["used_asset_bytes"]
+        self.assertEqual(total, man["asset_pins"]["_total_used_asset_bytes"],
+                         "the total byte count must equal the sum over the builds")
+        self.assertEqual(total, 447813339,
+                         "the three cuda assets' total byte count changed — the corpus pins were modified")
+
+    def test_pin_bytes_are_not_page_rounded(self):
+        """★ The page shows 140 MB (1024-based rounding); the exact value must be the measured one."""
+        pin = self._man()["asset_pins"]["b10472"]
+        self.assertEqual(pin["used_asset_bytes"], 146707438)
+        self.assertNotEqual(pin["used_asset_bytes"], 140 * 1024 * 1024,
+                            "do not use the page's rounded value as the exact byte count")
+
+    def test_cuda_minor_pinned_per_build(self):
+        """★ Per-build minor version: b10472/b10595 = 13.3, b11681 = 13.4.
+
+        This is the mechanical counterpart of the table hard-coded in README/TEACHING —
+        a vague "CUDA 13" in the docs goes red here.
+        """
+        man = self._man()
+        expect = {"b10472": "13.3", "b10595": "13.3", "b11681": "13.4"}
+        for tag, minor in expect.items():
+            name = man["asset_pins"][tag]["used_asset"]
+            self.assertIn(f"cuda-{minor}-x64", name,
+                          f"{tag}'s asset name should contain cuda-{minor}, actual: {name}")
+
+    def test_what_this_is_says_llama_cpp_not_meta_model(self):
+        man = self._man()
+        text = man["_what_this_is"]
+        self.assertIn("llama.cpp", text)
+        self.assertIn("ggml-org", text)
+        self.assertIn("not Meta", text,
+                      "must state that the corpus is llama.cpp engine builds, not Meta's Llama model weights")
+
+    def test_cpu_alternative_is_pinned_but_readings_unverified(self):
+        man = self._man()
+        for tag in aligned.BUILDS:
+            cpu = man["asset_pins"][tag]["alternatives"]["cpu"]
+            self.assertGreater(cpu["bytes"], 1_000_000)
+            self.assertRegex(cpu["sha256"], r"^[0-9a-f]{64}$")
+            self.assertTrue(cpu["readings_unverified"],
+                            f"{tag}'s CPU build must be marked as having unverified readings")
+            self.assertIn("unverified", cpu["note"])
+
+    def test_manifest_records_dll_evidence_for_cuda(self):
+        """★ The CUDA family is 'inferred from the shipped DLLs'; the minor version comes from the official asset name — two evidence strengths."""
+        man = self._man()
+        blob = json.dumps(man, ensure_ascii=False)
+        self.assertIn("cublas64_13.dll", blob)
+        self.assertIn("ggml-cuda.dll", blob)
+        self.assertIn("inferred", blob)
+
+    def test_pin_source_is_recorded(self):
+        man = self._man()
+        src = man["_pin_source"]
+        self.assertIn("Content-Length", src)
+        self.assertIn("sha256", src.lower())
+        self.assertIn("not downloaded", src,
+                      "must state that the 450 MB corpus was not downloaded just to pin it")
+
+    def test_verify_asset_checks_size_then_sha256(self):
+        """★ Pure verification function: byte mismatch, SHA256 mismatch and missing file must be distinguishable."""
+        import hashlib
+        import shutil
+        import tempfile
+        import fetch_corpus
+
+        tmp = tempfile.mkdtemp(prefix="bd_asset_")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        p = os.path.join(tmp, "asset.zip")
+        data = b"not a real zip, but stable bytes"
+        with open(p, "wb") as f:
+            f.write(data)
+        good = hashlib.sha256(data).hexdigest()
+
+        ok, why = fetch_corpus.verify_asset(p, len(data), good)
+        self.assertTrue(ok, why)
+
+        ok, why = fetch_corpus.verify_asset(p, len(data) + 1, good)
+        self.assertFalse(ok)
+        self.assertIn("byte count", why)
+
+        ok, why = fetch_corpus.verify_asset(p, len(data), "0" * 64)
+        self.assertFalse(ok)
+        self.assertIn("SHA256", why)
+
+        ok, why = fetch_corpus.verify_asset(os.path.join(tmp, "__no__"), 1, good)
+        self.assertFalse(ok)
+        self.assertIn("does not exist", why)
+
+    def test_cpu_asset_spec_comes_from_manifest(self):
+        import fetch_corpus
+        spec = fetch_corpus.asset_spec("b11681", "cpu")
+        self.assertEqual(spec["asset"], "llama-b11681-bin-win-cpu-x64.zip")
+        self.assertGreater(spec["bytes"], 0)
+        self.assertEqual(len(spec["sha256"]), 64)
 
 
 if __name__ == "__main__":

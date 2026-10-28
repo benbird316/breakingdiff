@@ -1,8 +1,8 @@
 # iglossary — English / Chinese / meaning in this system
 
-The repository was written in Chinese first and rewritten in English. It records the frozen
-English–Chinese mapping and each term's meaning in this system. It has no rationale columns:
-the body text and this meaning column are the whole contract.
+Bilingual glossary: it records the frozen English–Chinese mapping and each term's meaning
+in this system. There are no rationale columns: the body text and this meaning column are
+the whole contract.
 
 | English | 中文 | Meaning in this system |
 | --- | --- | --- |
