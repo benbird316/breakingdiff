@@ -44,6 +44,7 @@ Each gate module has a same-named `*_test.py`: a mutation-evidence regression lo
 | `references/phase-transition.md` | Phase-transition recipe: turn a red-first baseline into a regression lock. When a temporary verification script becomes a permanent test |
 | `references/domain-mapping.md` | Per-domain decision table and the Q source for each domain. In cross-domain scenarios, or when unsure whether it should trigger |
 | `references/receipt-format.md` | Receipt JSON field contract. Before auditing or consuming a receipt |
+| `references/downstream-evidence.md` | Opt-in per-point evidence hand-off: `compare_n(keep_vectors=True)` and `vector_digest` for a downstream consumer, plus the evidence-vs-gate discipline. When an attribution lab or evidence gate needs the verdicts, not just the shape counts |
 | `references/hooks.md` | Hook installation snippet and Windows PowerShell wrapper. When installing the host hook |
 | `references/strength.md` | Strength-layer method: shape, band width provenance, preregistration and the error-mode ladder. When claims keep going red although the data is fine |
 | `references/iglossary.md` | Frozen bilingual term decisions (English ↔ Chinese). When a term choice looks arbitrary and you want the recorded reason |

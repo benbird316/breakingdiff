@@ -396,6 +396,12 @@ class NWayResult:
     anchor: Optional[int] = None
     max_witness: int = 8
 
+    # ---- opt-in downstream evidence (default-empty; keep_vectors=False changes no existing readout) ----
+    vectors: List[Tuple[Any, Tuple[bool, ...]]] = field(default_factory=list)   # (point, verdict vector); filled only when keep_vectors=True
+    outlier_witnesses: Dict[int, List[Any]] = field(default_factory=dict)       # account index -> witness points (capped at max_witness)
+    pioneer_witnesses: Dict[int, List[Any]] = field(default_factory=dict)
+    ratchet_points: int = 0        # DISTINCT points with >=1 ratchet violation (ratchet_total counts (old,new) pairs per point)
+
     @property
     def in_domain(self) -> int:
         """Points that actually entered the shape statistics (= total).
@@ -413,7 +419,7 @@ class NWayResult:
 def compare_n(claims: List[Claim], domain: Iterable[Any], *,
               chain: bool = False, anchor: Optional[int] = None,
               order_key: Optional[Callable[[int, Claim], Any]] = None,
-              max_witness: int = 8) -> NWayResult:
+              max_witness: int = 8, keep_vectors: bool = False) -> NWayResult:
     """Point-by-point differential over N ≥ 2 accounts. With chain=True, additionally run the ratchet check:
     for every pair j<k (j old, k new), a point where v_j is true and v_k is false counts as a ratchet violation — the old version had it, the new version dropped it.
 
@@ -473,6 +479,8 @@ def compare_n(claims: List[Claim], domain: Iterable[Any], *,
         r.total += 1
         if chain:
             seen.append((x, v))
+        if keep_vectors:
+            r.vectors.append((x, tuple(v)))
         t = sum(v)
         if t == n:
             r.all_true += 1
@@ -481,24 +489,76 @@ def compare_n(claims: List[Claim], domain: Iterable[Any], *,
         elif t == 1:
             i = v.index(True)
             r.pioneers[i] = r.pioneers.get(i, 0) + 1
+            if keep_vectors:
+                w = r.pioneer_witnesses.setdefault(i, [])
+                if len(w) < max_witness:
+                    w.append(x)
         elif t == n - 1:
             i = v.index(False)
             r.outliers[i] = r.outliers.get(i, 0) + 1
+            if keep_vectors:
+                w = r.outlier_witnesses.setdefault(i, [])
+                if len(w) < max_witness:
+                    w.append(x)
         else:
             r.split += 1
             if len(r.split_witnesses) < max_witness:
                 r.split_witnesses.append(x)
     if chain:
         for x, v in seen:
+            hit = False
             for j in range(n):
                 if not v[j]:
                     continue
                 for k in range(j + 1, n):
                     if not v[k]:
                         r.ratchet_total += 1
+                        hit = True
                         if len(r.ratchet_witnesses) < max_witness:
                             r.ratchet_witnesses.append((j, k, x))
+            if keep_vectors and hit:
+                r.ratchet_points += 1
     return r
+
+
+def vector_digest(vectors, *, key=None):
+    """Content hash over the FULL per-point verdict vectors from
+    compare_n(..., keep_vectors=True), for downstream evidence hand-off.
+
+    This is a downstream evidence anchor, NOT a gate input: the receipt's hard
+    reconciliation stays on aggregate counters (receipt.py deliberately keeps
+    per-point data soft), so this digest never enters a blocking comparison.
+
+    Determinism, three anchors:
+      1. full, untruncated: every row in `vectors` is hashed, never a capped sample;
+      2. order-independent: rows are sorted by their serialized point key before
+         hashing, so the digest does not depend on the order the domain was iterated;
+      3. pure: predicates are deterministic, so a re-execution reproduces the rows.
+
+    `key(point)` converts a parameter point to a stable JSON-serializable identity
+    (default json.dumps with sorted keys). A point that cannot be serialized raises
+    TypeError on the spot -- fail loud rather than silently dropping a row, which
+    would hash a shorter vector while looking identical. Pass `key=` for points that
+    are not directly JSON-serializable.
+
+    An empty `vectors` hashes the empty structure to a fixed constant; callers should
+    confirm in_domain > 0 before treating a digest as evidence that anything was
+    compared. Replay recipe: re-run compare_n(..., keep_vectors=True), recompute
+    vector_digest, compare the two digest strings.
+    """
+    import hashlib
+    import json
+
+    rows = []
+    for point, verdict in vectors:
+        pk = key(point) if key is not None else json.dumps(
+            point, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if not isinstance(pk, str):
+            pk = json.dumps(pk, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        rows.append((pk, [bool(b) for b in verdict]))
+    rows.sort(key=lambda r: r[0])
+    payload = json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _nway_zero_domain_banner(r: NWayResult) -> str:

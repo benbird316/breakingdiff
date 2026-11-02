@@ -16,6 +16,85 @@ there.
 
 ---
 
+## 1.1.0 (2026-10-30)
+
+Opt-in **downstream evidence hand-off**. This release makes the per-point material that
+`compare_n` already computes internally available to downstream consumers (attribution
+labs, evidence gates) without changing the readout or widening the gate. No API was
+removed and no pre-existing field moves: with the new flag off, the path is byte-for-byte
+the 1.0.1 path.
+
+This is a **design decision plus a fork reconciliation**, not a bug fix. The center of
+gravity is a distinction that is easy to collapse and expensive to collapse wrong:
+**returning per-point evidence ≠ putting per-point evidence into the gate.**
+
+### Surface added (all opt-in, all default-off)
+
+- `compare_n(..., keep_vectors=False)` — signature-compatible; unchanged default. When
+  on, the result additionally carries:
+  - `vectors`: one `(point, verdict-tuple)` per in-domain point, in post-`order_key`
+    account order (the same reordering trap as `anchor` — a column attributed to the
+    wrong account is a silent wrong answer).
+  - `outlier_witnesses` / `pioneer_witnesses`: account index → located points, capped at
+    `max_witness` (the existing counts gain *location*).
+  - `ratchet_points`: DISTINCT points carrying ≥1 ratchet violation, alongside
+    `ratchet_total` which counts (old,new) pairs — one point can contribute several pairs.
+    Both require `chain=True`; `ratchet_points` additionally requires the flag.
+- `vector_digest(vectors, *, key=None)` — `sha256:<64hex>` over the FULL sequence:
+  untruncated (a capped witness list is not the whole), order-independent (rows sorted by
+  serialized point key), and fail-loud on a point it cannot serialize rather than silently
+  dropping a row. `key=` supplies a stable identity for non-JSON points; an empty input
+  hashes to a fixed constant (check `in_domain > 0` before reading it as proof).
+
+### Two decisions this batch resolved
+
+1. **The fork filled its witnesses unconditionally.** Merging the downstream patch
+   (`compare_n_keep_vectors.patch`, dry-run: 4/4 hunks apply cleanly to 1.0.1) as-is
+   would have left `keep_vectors=False` still writing new fields — a flag that does not
+   gate what it names. This repo **narrows** it: the single flag gates ALL new per-point
+   evidence (vectors, located witnesses, `ratchet_points`), so the default leaves every
+   new field empty/0 and no pre-existing field changes. Verified field-for-field by test.
+2. **"Vectors not in the receipt" is intentional, not a defect.** The receipt's hard
+   reconciliation compares aggregate counters; per-point data depends on discovery order
+   and truncation and is reconciled softly or not at all (`receipt.py`). Forcing vectors
+   into the hard comparison would misfire the moment order or the `max_witness` cap
+   changed, or a replay omitted the flag — a false red indistinguishable from a real
+   discrepancy. So the digest stays **evidence, never a gate input**. `SCHEMA_VERSION`
+   stays 2; no receipt field changed.
+
+### Verification and mutation evidence
+
+- New `scripts/downstream_evidence_test.py`, 13/13 green, registered in
+  `test_alignment_bootstrap.py`'s `TEST_FILES_ALL`. Pins: default-emptiness;
+  flag-on/off equality on every pre-existing field; per-point vector shape and
+  order-following columns; witness cap + gating; `ratchet_points` distinct-point
+  semantics and its dependence on `chain`+flag; digest determinism / order-independence /
+  flip-sensitivity / fail-loud / custom-key; and the receipt-byte-invariance guarantee.
+- **Two implementation mutations** (ORCHESTRATION §5), each loaded from a tempdir copy
+  with bytecode writing disabled (§5.1 pyc timestamp trap): removing the `keep_vectors`
+  gate → the default run emits vectors → the emptiness lock goes red; removing the
+  witness cap → the list exceeds `max_witness` → the cap lock goes red. Both directions
+  confirm the locks have discriminating power. The receipt-byte test is the "too tight"
+  guard — it fails if per-point data ever leaks into the hard gate.
+- Existing `breakingdiff_test.py` 15/15 and `iteration_chain_test.py` 17 OK stay green on
+  the default path (no regression). `bootstrap` four quadrants re-reconciled: common
+  50→52 (two new promised-and-pinned items), divergence 4, dominance 19, neither 0,
+  75 items total, Q-anchor orphans 0. `refs_guard` 14/14, `leak_guard` clean.
+
+### Documentation
+
+- `SKILL.md`: the compare_n section gains the opt-in promise and the "evidence, never
+  gate input" discipline, as a body paragraph (no new section title, so
+  `self_coverage_gate` stays green), pointing at the new reference.
+- `references/downstream-evidence.md`: the tool contract, the replay recipe, and the
+  evidence-vs-gate pitfalls — the **teaching** half, so a downstream agent can actually
+  take the evidence back and re-derive it. Methods live here, promises in SKILL.md,
+  evidence in this file, navigation in INDEX.md.
+- `INDEX.md` registers the new reference. `VERSION` 1.0.1 → 1.1.0; `version_stamp` has
+  an empty derived-target surface, so no derived site moves.
+
+---
+
 ## 1.0.1 (2026-10-29)
 
 Second public release: the first batch of fixes and curation after 1.0.0. No API was

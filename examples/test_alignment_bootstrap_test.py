@@ -178,6 +178,9 @@ COMMON_ADDED = [
     "盲写.期望被改必被抓",
     "盲写.计数器硬对账",
     "盲写.见证软对账",
+    # 2026-10-30: opt-in downstream evidence hand-off, promised + pinned
+    "下游证据.opt-in 拿回逐点向量",
+    "下游证据.摘要与向量不进门禁",
 ]
 
 # Recaclulated 2026-10-15: catalog 52 items (delivery gate 10 + coverage-ratio
@@ -192,7 +195,7 @@ COMMON_ADDED = [
 # items are a duality that only a human reviewing the transcript can catch (a mechanical
 # test cannot pin "did it make up a number"), so by the provenance precedent, all five
 # stay in dominance.
-EXPECT = dict(common=50, divergence=4, dominance=19, neither=0)
+EXPECT = dict(common=52, divergence=4, dominance=19, neither=0)
 
 
 # ---------------------------------------------------------------- provenance binding

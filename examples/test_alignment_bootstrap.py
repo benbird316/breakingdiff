@@ -166,6 +166,10 @@ TEST_FILES_ALL = [
     # wording and witness-cap notices (breakingdiff_test.py). Same reason as the list
     # above: a missed file = assertions there are counted as gaps on the P side.
     os.path.join(ROOT, 'scripts', 'breakingdiff_test.py'),
+    # Added 2026-10-30: opt-in downstream evidence hand-off (keep_vectors, located
+    # witnesses, ratchet_points, vector_digest, receipt-byte invariance). Same reason:
+    # a missed file = guarded items counted as gaps on the P side.
+    os.path.join(ROOT, 'scripts', 'downstream_evidence_test.py'),
 ]
 TEST_CORPUS = "\n".join(_read(p) for p in TEST_FILES_ALL)
 
@@ -476,6 +480,17 @@ CATALOG = [
     dict(key="结论纪律.无读数支撑的数字禁写",
          phrase="must not be stated as a readout", topic="conclusion discipline",
          func=None),
+    # ---- added 2026-10-30: opt-in downstream evidence hand-off ----
+    # Both land in common: each promise is verbatim in SKILL.md and pinned by a
+    # named assertion in downstream_evidence_test.py (registered in TEST_FILES_ALL below).
+    dict(key="下游证据.opt-in 拿回逐点向量",
+         phrase="keep_vectors=True returns one verdict vector per in-domain point",
+         topic="evidence hand-off",
+         func="test_keep_vectors_returns_one_vector_per_indomain_point"),
+    dict(key="下游证据.摘要与向量不进门禁",
+         phrase="toggling keep_vectors does not change a single byte of the receipt",
+         topic="evidence hand-off",
+         func="test_receipt_bytes_identical_when_keep_vectors_toggled"),
 ]
 
 # Section title → the topic of the commitment items it carries.
