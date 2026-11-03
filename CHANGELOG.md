@@ -16,6 +16,122 @@ there.
 
 ---
 
+## 1.1.1 (2026-11-03)
+
+The third job in the trigger list — "an agent's early claim against the artifact it
+finally lands" — had a name but no executable path. The complaint was real: the text
+judged P6 by *who wrote what*, so a plan and its realization from one hand were
+declared same-source self-consistency and stopped there, even when the plan had been
+written and recorded before the work began.
+
+**What changed.** P6 gains one narrow exception: a before-side **frozen** before the
+other side existed — a recorded `sha256:<hex>` digest that is recomputed, or a commit
+that pins the text — makes the pair `contract vs realization` even from one hand.
+The dimension P6 actually tests is *post-hoc irreconcilability*, not authorship. The
+old defense line is kept intact: an account written or amended after the result is read
+gains nothing, and a freeze that no longer matches the plan text must raise **before**
+comparing rather than produce a readout.
+
+Added: `references/plan-vs-realization.md` (method only — freeze, write P/Q, read the
+quadrants, state the conclusion) and `examples/plan_vs_realization.py`. The instance is
+a synthetic, redacted four-point CLI fixture: `--json` on both sides (common),
+`--dry-run` landed but never promised (divergence), `--resume` promised but never
+landed (dominance), `--quiet` on neither. Deliberately not in `casestudy/`: that
+directory is bound to real corpora and real readouts, and a synthetic fixture would
+dilute it.
+
+**Evidence.** `examples/plan_vs_realization_test.py` runs 4/4 (digest freeze gives
+1/1/1/1; a commit pin is equally usable; an amended plan raises `MISMATCH` before any
+readout is produced; no freeze falls back to `same-source self-consistency`). Mutation:
+short-circuiting the digest comparison turns exactly the amended-plan assertion red
+(`3/4 passed`), and restoring the file returns the recorded sha256. The bootstrap
+catalog grew by three keys and the alignment self-check moved 52→55 common with
+divergence 4 / dominance 19 / neither 0 unchanged.
+
+**Trigger rewrite.** The frontmatter description was 996 characters and opened on a
+description of what the tool *is*, so an agent could read it as "understood" and skip
+the body. It now opens on the moment of the claim, states the freeze precondition
+inside the trigger — job 3 applies only when the plan side was frozen before
+implementation began; without that freeze the pair is `same-source self-consistency`,
+never verification — and drops the implementation summary to 883 characters. The
+"Plan vs realization" body section was prose; it is now three ordered actions: check
+the freeze first, compare only after it passes, then read the quadrants. That order is
+the same rule the instance pins, so the body can no longer be read as "freeze is
+optional".
+
+**Body boundary.** The `## Host hooks (optional installation)` section was thirteen
+lines of installation JSON and a seven-step decision order sitting in the execution
+body — a one-time host action, not something a run executes. It is now one navigation
+line pointing at `references/hooks.md`, which absorbed the decision order and a
+self-contained `## Honest degradation` section (the two delegating sentences that
+bounced the reader back to SKILL.md are gone). The installation snippet moved to a
+`## Optional: host hook` section in `README.md`. `references/hooks.md` stays under
+`references/` because `refs_guard.py` refuses an orphan reference, and the body keeps
+one pointer line rather than dropping the file — the executable body shrank without
+breaking reference integrity. `scripts/hooks_contract_test.py` covered three
+hand-copied judge orders; the condensed SKILL.md copy no longer exists, so the contract
+was thawed to two copies (`references/hooks.md` + `hook_entry.py` docstring), with the
+thaw recorded in the module docstring. Counts are unchanged: common 55 / divergence 4
+/ dominance 19 / neither 0.
+
+**Marker at the entry point.** The Stop hook was silent for the most literal reason: the
+execution body never asked for `.breakingdiff/pending`, so the decision's `if` had nothing
+to read. `scripts/receipt.py` now exports `begin_differential()`, which writes the marker
+to disk and reads it back before the comparison runs; a receipt on disk is what closes the
+differential. The usage block leads with the call, and `references/hooks.md` names it as
+the writer, so the marker follows the act rather than a separate instruction. No injection
+text changed: every red already carries a next step, and none fires unless disk state
+changed.
+
+**Mechanism audit: the marker pair now closes.** An architecture review of the
+injection mechanism — not of the disk verdict — found that the two markers never
+reconciled each other. `begin_differential` wrote `pending` but left a previous
+`receipt.json` in place, so once a project had written one receipt the decision's
+`pending without receipt` branch was unreachable for the rest of that project's life;
+and `write_receipt` persisted the receipt without removing the marker, so a marker
+outlived the differential it belonged to. Both ends now clear the other:
+`begin_differential` removes a leftover `receipt.json` before writing the marker, and
+`write_receipt` removes `pending` in the same step that persists the receipt.
+`receipt_test.py` pins both (`test_begin_differential_clears_a_leftover_receipt`,
+`test_write_receipt_closes_the_pending_marker`), plus the failed-start path: the
+marker is written and read back **before** the previous receipt is removed, so a
+start that cannot write the marker leaves the old receipt intact rather than making
+the differential invisible (`test_begin_differential_keeps_the_old_receipt_when_the_marker_cannot_be_written`); 34/34.
+
+**The stale branch is unreachable, so it is gone.** Closing the marker pair left
+exactly two reachable disk states — `pending` alone (differential open) and
+`receipt.json` alone (closed). Branch 6 (`claims newer than the receipt`) required
+both markers at once, which the product no longer produces; it survived only in
+tests that hand-built that state. Keeping it meant a checker that could assert on
+an artifact the writer never creates, and it would have judged a closed receipt
+against the working tree for the rest of the project's life. The branch, its
+`BD_CLAIMS_FILES`/`git status` list sources, and its five tests are removed. The
+invariants that replace it: `pending` present means open; `write_receipt` closes
+it; a closed differential is not reopened by later edits; both markers at once
+means a crash between the two writes, which reads as open and is repaired by the
+next begin/write. `hook_entry_test.py` pins the closed state
+(`test_closed_receipt_ignores_later_claims_edits`), and the judge order drops to
+six entries in both hand-copied sources (`hooks_contract_test.py` counts 1..6).
+
+**Windows wrapper keeps exit 2.** `powershell.exe -Command "python
+scripts/hook_entry.py"` returns 1 for a non-zero Python exit; the host only blocks on
+2. Every injection through that wrapper was therefore silently downgraded to a no-op.
+Both wrapper variants now end in `; exit $LASTEXITCODE`. Measured on this host:
+direct 2 / old wrapper 1 / fixed wrapper 2. Documented in `references/hooks.md`
+together with why the trailing segment is load-bearing, not cosmetic.
+
+**Evidence.** `receipt_test.py` 34/34, `hook_entry_test.py` 8/8,
+`hooks_contract_test.py` 3/3, `ci_gate.py` 31/31 files, `refs_guard.py` 14/14,
+`trigger_conditions_test.py` 14/14, bootstrap common 55 / divergence 4 / dominance 19
+/ neither 0 (orphans 0), `version_stamp.py check` source 1.1.1 consistent.
+
+**Doc pass (same release).** Seven SKILL.md passages were condensed — divergence,
+tolerance, use/do-not-use, the freeze exception, the trigger point, the receipt rerun
+clause — with no catalog phrase moved. The downstream-evidence baseline now reads
+`pre-1.1.0` instead of the stale `v1.0.1`, because `keep_vectors` landed in 1.1.0.
+Readout after the pass: bootstrap 55 / 4 / 19 / 0 with orphans 0, `refs_guard.py` 76/76,
+`trigger_conditions_test.py` 14/14, `ci_gate.py` 31/31.
+
 ## 1.1.0 (2026-10-30)
 
 Opt-in **downstream evidence hand-off**. This release makes the per-point material that

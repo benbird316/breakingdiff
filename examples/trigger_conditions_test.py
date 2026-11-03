@@ -54,7 +54,7 @@ def _read(p):
 TRIG_TEXT = _read(TRIG_FILE)
 TEST_TEXT = _read(TEST_FILE)
 # Read SKILL.md by itself too: criteria such as the size ceiling and historical
-# wording measure the SKILL.md file itself; since B2, SPEC_TEXT is a seven-file union
+# wording measure the SKILL.md file itself; since B2, SPEC_TEXT is an eight-file union
 # and can no longer serve as a single-file measurement proxy.
 SKILL_TEXT = _read(os.path.join(ROOT, 'SKILL.md'))
 

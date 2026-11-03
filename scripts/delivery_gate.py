@@ -14,8 +14,14 @@ only same-source self-consistency, not cross-verification. Such a gate produces 
 false green, and a false green is worse than no gate: it makes people believe it
 verified something.
 
-So this gate **swaps the opponent**: it does not compare against "your own past", but
-against an independent source.
+So this gate **swaps the opponent**: it does not compare against "your own past" written
+in the same session and never frozen, but against an independent source.
+
+One narrow carve-out: if the before-side was frozen before the change — a recorded
+digest, or a commit pinning its text — the pair is `contract vs realization` and counts
+as independent provenance even from one hand. The gate here still swaps the opponent
+rather than relying on that carve-out: an account written or amended after the result is
+read gains nothing.
 
     Q spec account   = specs, contracts, type definitions, and actual consumer
                        dependencies written by a human or upstream

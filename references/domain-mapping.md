@@ -19,7 +19,7 @@ Tolerance is another pit: in floating-point equality, p-value thresholds, and si
 
 ### P6 independence: whose hand did the N accounts come from
 
-A new procedure copied from the old, an agent writing both docs and code, a review copied from another review — an agreement readout is evidence of self-consistency, not cross-verification. The tool still runs and still gives a readout; the readout is not extrapolated into correctness. Across domains P6 breaks most easily where it "looks like two things": the same person, the same pipeline, the same model session all count as same-source.
+A new procedure copied from the old, an agent writing both docs and code, a review copied from another review — an agreement readout is evidence of self-consistency, not cross-verification. The tool still runs and still gives a readout; the readout is not extrapolated into correctness. Across domains P6 breaks most easily where it "looks like two things": the same person, the same pipeline, the same model session all count as same-source. The single exception is a freeze: a before-side recorded as a digest or a commit before the other side existed is independent provenance, and the pair is `contract vs realization` — not because the author changed, but because the later side could not have shaped the earlier one.
 
 ## Per-domain decision table
 
@@ -31,7 +31,7 @@ A new procedure copied from the old, an agent writing both docs and code, a revi
 | Research | claimed conclusions vs evidence list; two versions of an experimental protocol; pre-registration vs report | ✓ | holds once compressed into items | ✓ | pin the decision rule for statistics first | ✓ | usually good | run only on enumerable items; decide tolerance ownership for p-value cases first |
 | Engineering/industrial | old vs new procedure; acceptance criteria vs deliverables; compliance clauses vs audit working papers; bill of materials | ✓ | (clause, object) | ✓ | binarize clause strength first | ✓ | depends on the revision chain | new standards are often revised from old ones; quantitative clauses carry tolerance |
 | Theory (mathematics) | two definitions; two frameworks | ✓ | hardest, formalize first | ✓ | boundary counterexamples are binarizable | ✓ | depends on the school | if prose definitions cannot be flattened, do not run |
-| Agent self-check | doc claims vs independent code extraction; CHANGELOG vs the actual diff | ✓ | holds once extracted into items | ✓ | existence is decidable | ✓ | naturally good but must be verified | docs and code generated in the same session count as same-source |
+| Agent self-check | doc claims vs independent code extraction; CHANGELOG vs the actual diff | ✓ | holds once extracted into items | ✓ | existence is decidable | ✓ | naturally good but must be verified | docs and code generated in the same session count as same-source, unless the doc side was frozen before the code was written |
 
 ## Per-domain applicable and inapplicable forms
 
@@ -53,7 +53,7 @@ Not applicable: correctness of a proof process (not a two-account comparison que
 
 **Agent self-check**
 Applicable: interfaces/config items claimed in a doc table vs independently extracted from code (a list reconstructed by AST or grep, not a paraphrase); CHANGELOG claims vs the actual diff.
-Not applicable: LLM paraphrase extraction (same model, same session = same-source, P6 breaks); doc tone vs code style (not a per-parameter-point relation).
+Not applicable: LLM paraphrase extraction (same model, same session = same-source, P6 breaks; a plan frozen before the extraction ran is the exception); doc tone vs code style (not a per-parameter-point relation).
 
 ## Per-domain Q sources
 

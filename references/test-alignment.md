@@ -10,7 +10,7 @@ Re-read the four quadrants for this scenario:
 | Quadrant | Reading |
 |:--|:--|
 | common P∧Q | the test pins it and the spec promises it — held |
-| dominance ¬P∧Q | the spec promised it and the test does not hold it, **a coverage gap to fill** (this column is the product) |
+| dominance ¬P∧Q | the spec promised it and the test does not hold it, **a coverage gap to fill**; here P is the test and Q the spec, both fixed by the scenario, so the product column lands on this quadrant — it is a function of which account is P, not of the quadrant |
 | divergence P∧¬Q | the test pins it and the spec does not promise it, **the test is finer, mostly hardening**; delete it if it is too fine |
 | neither ¬P∧¬Q | neither side cares |
 
@@ -58,7 +58,9 @@ The real-library version (B) does not exist yet; to choose Q, see the table abov
 
 **A gate cannot be established by comparing before and after the refactor.** Both sides are written by the same agent, and agreement is only same-source self-consistency (it fails P6); such a gate gives a false green — **a false green is worse than no gate: it makes people think they verified**.
 
-**So the gate changes opponents**: it does not compare "your own past", it compares "an independent source".
+One carve-out, and it is narrow: if the before-side was frozen before the change — a recorded digest, or a commit that pins its text — that pair is `contract vs realization`, not same-source, even when one hand wrote both. The plan-vs-realization article covers how to freeze and what that readout then licenses. What the carve-out does not cover is an account written or amended after the result has been read; that falls back to self-consistency.
+
+**So the gate changes opponents**: it does not compare "your own past" written in the same session and never frozen, it compares "an independent source".
 
 ```
 Q contract account = specs, contracts, type definitions, and actual consumer dependencies written by humans/upstream

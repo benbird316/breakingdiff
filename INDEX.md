@@ -27,13 +27,13 @@ if it bloats, it defeats the reason it exists. For the argument, see README.md, 
 | `scripts/refs_guard.py` | Static reference-integrity gate: dead links / orphans / cross-links / TOC / pointer form / pointer commitments / navigation table. Run it after any change to SKILL.md or references/ |
 | `scripts/refs_guard_test.py` | Regression lock for the above (mostly fixture-driven, plus live-repo acceptance checks: a live-repo all-green anchor, an AGENTS.md structure anchor, SPEC_FILES reconciliation, and pointer commitments honored in the live repo) |
 | `scripts/strength_calibration.py` | Measures the false-red ladder of candidate claim shapes and records the strength decision (shape, band, provenance, preregistration). When claims keep going red on data that is fine, or before a gate is enabled on a new claim |
-| `scripts/hooks_contract_test.py` | Contract for consistency across the three copies of the hook decision order: SKILL.md / references/hooks.md / hook_entry.py docstring, checked against the frozen anchor table and exit-code mapping. Run it after changing the decision order or any of its documentation copies |
+| `scripts/hooks_contract_test.py` | Contract for consistency across the two copies of the hook decision order: references/hooks.md / hook_entry.py docstring, checked against the frozen anchor table and exit-code mapping. Run it after changing the decision order or any of its documentation copies |
 | `scripts/bd_paths.py` | Four-level bd_home resolution (BD_HOME → CLAUDE_SKILL_DIR → CLAUDE_PLUGIN_ROOT → file_relative); when set explicitly but the candidate is unusable, it raises instead of falling back. When you copy the module outside the repo and need to find the way back to the repo root |
 | `scripts/dist_layout.py` | Install-layout build/verify: copy SKILL.md + scripts + references + examples from the repo root into an installable layout; verify reconciles the file sets of the three directories against the source repo in both directions. When packaging an install layout, or checking whether the copied artifacts are complete |
 | `scripts/version_stamp.py` | Single source of truth for the version, sync/check: the repo-root VERSION is the source, and derived sites are compared field by field, site by site (compare first, then write). When bumping the version for a release, or checking whether derived sites are in sync |
 | `scripts/leak_guard.py` | Blind-run leak guard: scans `SKILL.md` + `references/*.md` for test-assertion fingerprints (test function names, long assert messages) and grading keywords, so a context-free agent that reads only the skill learns usage rather than the grading account. Run it after editing `SKILL.md` or any reference |
 
-Each gate module has a same-named `*_test.py`: a mutation-evidence regression lock — break it and it must go red (except `ci_gate.py`, covered by the suite it runs, and the contract test `hooks_contract_test.py`, which guards three copies of the hook decision order). The core engine (`breakingdiff.py`) has its own `scripts/breakingdiff_test.py` (zero-domain banners, verdict wording, witness-cap notices) on top of the `examples/` suite. After changing the decision logic, rerun everything (see README.md, "install and verify").
+Each gate module has a same-named `*_test.py`: a mutation-evidence regression lock — break it and it must go red (except `ci_gate.py`, covered by the suite it runs, and the contract test `hooks_contract_test.py`, which guards two copies of the hook decision order). The core engine (`breakingdiff.py`) has its own `scripts/breakingdiff_test.py` (zero-domain banners, verdict wording, witness-cap notices) on top of the `examples/` suite. After changing the decision logic, rerun everything (see README.md, "install and verify").
 
 ## references/
 
@@ -45,7 +45,8 @@ Each gate module has a same-named `*_test.py`: a mutation-evidence regression lo
 | `references/domain-mapping.md` | Per-domain decision table and the Q source for each domain. In cross-domain scenarios, or when unsure whether it should trigger |
 | `references/receipt-format.md` | Receipt JSON field contract. Before auditing or consuming a receipt |
 | `references/downstream-evidence.md` | Opt-in per-point evidence hand-off: `compare_n(keep_vectors=True)` and `vector_digest` for a downstream consumer, plus the evidence-vs-gate discipline. When an attribution lab or evidence gate needs the verdicts, not just the shape counts |
-| `references/hooks.md` | Hook installation snippet and Windows PowerShell wrapper. When installing the host hook |
+| `references/plan-vs-realization.md` | Plan-vs-realization method: the P6 freeze exception — how to freeze a plan (digest or commit), how the pair becomes `contract vs realization`, and what the readout still does not buy. When comparing an early plan against the artifact that finally lands |
+| `references/hooks.md` | Hook installation snippet, Windows PowerShell wrapper, the disk markers, the judge order and exit codes, and the honest-degradation boundary. When installing the host hook or reading what it can and cannot buy |
 | `references/strength.md` | Strength-layer method: shape, band width provenance, preregistration and the error-mode ladder. When claims keep going red although the data is fine |
 | `references/iglossary.md` | Frozen bilingual term decisions (English ↔ Chinese). When a term choice looks arbitrary and you want the recorded reason |
 
@@ -56,6 +57,7 @@ Each gate module has a same-named `*_test.py`: a mutation-evidence regression lo
 | `examples/value_type_fingerprint.py` | Starter instance: a type-fingerprint criterion, one pass and one reject. Read it on your first contact with the engine |
 | `examples/iteration_chain.py` | N-account chain check in contrast: pairwise diffs vs the readout difference under chain=True. In multi-version iteration-chain scenarios |
 | `examples/test_alignment_bootstrap.py` | Bootstrap reconciliation: Q = SKILL.md commitments vs P = test assertions. Must run after changing SKILL.md |
+| `examples/plan_vs_realization.py` | Plan-vs-realization instance: a synthetic four-point CLI fixture, a digest/commit freeze, and a loud mismatch on an amended plan. When running the P6 freeze exception end to end |
 | `examples/trigger_conditions_test.py` | Regression lock for trigger conditions and the coverage gate |
 | `examples/casestudy_test.py` | Casestudy instance gate: existence / count anchors / pure-script assertions. After changing any file under casestudy/ |
 | `examples/forgery_poc.py` | Forgery-capability baseline (permanent; not in TEST_FILES_ALL). When checking "effective against sloppiness ≠ effective against forgery" |

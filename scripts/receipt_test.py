@@ -25,8 +25,8 @@ sys.path.insert(0, HERE)
 from breakingdiff import Claim, compare, compare_n
 import bd_paths
 from receipt import (EXIT_GATE_FAIL, EXIT_PASS, EXIT_RUNTIME_ERROR, ReceiptError,
-                     audit, claims_identity_of, domain_digest_of, gate_exit_code,
-                     load_expected, provenance_summary, read_receipt,
+                     audit, begin_differential, claims_identity_of, domain_digest_of,
+                     gate_exit_code, load_expected, provenance_summary, read_receipt,
                      receipt_from_nway, receipt_from_pairwise, reconcile,
                      verify_receipt_file, write_receipt, write_expected)
 
@@ -287,6 +287,77 @@ def test_receipt_write_is_utf8_no_bom_and_readback_is_enforced():
             f.write(b"tampered")
         with raises(ReceiptError):
             verify_receipt_file(rc, path)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_begin_differential_leaves_a_marker_on_disk_before_comparing():
+    """The Stop hook reads disk state, not intent: a differential that only plans to
+    start one stays invisible. Beginning it must put the marker on disk, and a second
+    begin must not fail — the marker's presence is the signal, not its content."""
+    d = _tmpdir()
+    try:
+        marker = os.path.join(d, ".breakingdiff", "pending")
+        begin_differential(marker)
+        assert os.path.isfile(marker), "the marker has to exist on disk before the comparison runs"
+        begin_differential(marker)        # idempotent: restarting a differential is not an error
+        assert os.path.isfile(marker)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_begin_differential_clears_a_leftover_receipt():
+    """A differential that starts after a previous one must not inherit its receipt:
+    the hook judges "pending without receipt", so a surviving receipt makes every
+    later differential invisible for the life of the project."""
+    d = _tmpdir()
+    try:
+        bd = os.path.join(d, ".breakingdiff")
+        os.makedirs(bd)
+        rpath = os.path.join(bd, "receipt.json")
+        with open(rpath, "wb") as f:
+            f.write(b"{}\n")
+        begin_differential(os.path.join(bd, "pending"))
+        assert not os.path.exists(rpath), "a new differential has to start from a clean slate"
+        assert os.path.isfile(os.path.join(bd, "pending"))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_begin_differential_keeps_the_old_receipt_when_the_marker_cannot_be_written():
+    """Ordering is load-bearing: the marker lands and is verified before the previous
+    receipt is destroyed. When the write fails the project must fall back to its previous
+    state; a destroyed receipt with no marker leaves the new differential invisible to the
+    hook, which reads presence, not intent."""
+    d = _tmpdir()
+    try:
+        bd = os.path.join(d, ".breakingdiff")
+        os.makedirs(bd)
+        rpath = os.path.join(bd, "receipt.json")
+        with open(rpath, "wb") as f:
+            f.write(b"{}\n")
+        os.makedirs(os.path.join(bd, "pending"))    # open() on a directory fails
+        with raises(OSError):
+            begin_differential(os.path.join(bd, "pending"))
+        assert os.path.isfile(rpath), "a failed start must not destroy the previous receipt"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_write_receipt_closes_the_pending_marker():
+    """A persisted receipt closes the differential: the pending marker goes away in the
+    same step. A marker outliving its receipt reports the same stale start on every
+    later turn."""
+    p, q = mk_pair()
+    d = _tmpdir()
+    try:
+        bd = os.path.join(d, ".breakingdiff")
+        begin_differential(os.path.join(bd, "pending"))
+        rc = receipt_from_pairwise(p, q, compare(p, q, DOMAIN), domain=DOMAIN,
+                                   rerun_cmd="python scripts/make_receipt.py")
+        write_receipt(rc, os.path.join(bd, "receipt.json"))
+        assert not os.path.exists(os.path.join(bd, "pending")), "a receipt on disk is what closes the differential"
+        assert os.path.isfile(os.path.join(bd, "receipt.json"))
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

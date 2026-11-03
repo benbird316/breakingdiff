@@ -5,7 +5,7 @@ breakingdiff — domain-agnostic claim differential core (V0.1)
 Given two executable claims P, Q and one shared parameter space, mechanically compute:
     common      P ∧  Q     both hold
     divergence  P ∧ ¬Q     ← P is stronger
-    dominance  ¬P ∧  Q     ← ⚠️ Q is stronger (this column is the product)
+    dominance  ¬P ∧  Q     ← Q is stronger (what it means is injected by the caller)
     neither    ¬P ∧ ¬Q     neither holds
     out of domain     one of them is undefined
 

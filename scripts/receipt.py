@@ -112,10 +112,11 @@ exemption and is refreshed by hand by the upgrade script along with field-table 
 
 Usage:
 
-    from receipt import receipt_from_pairwise, write_receipt, gate_exit_code
+    from receipt import begin_differential, receipt_from_pairwise, write_receipt, gate_exit_code
+    begin_differential()              # the marker goes to disk before comparing: the hook reads disk, not intent
     r = compare(P, Q, domain)
     rc = receipt_from_pairwise(P, Q, r, domain=domain, rerun_cmd="python run.py")
-    write_receipt(rc, ".breakingdiff/receipt.json")
+    write_receipt(rc, ".breakingdiff/receipt.json")   # a receipt on disk is what closes the differential
     sys.exit(gate_exit_code(rc))      # an exception blows up on its own → the outer layer maps it to 2
 
 Command line: python receipt.py --self-check    # run this module's own regression
@@ -434,10 +435,38 @@ def _canonical_bytes(obj: Any) -> bytes:
             + "\n").encode("utf-8")
 
 
+def begin_differential(path: str = os.path.join(".breakingdiff", "pending")) -> None:
+    """Open the differential by putting its marker on disk before the comparison runs: the Stop
+    hook reads disk state, not intent, so a differential that never leaves a marker is invisible
+    to it. The marker's content is unconstrained — presence is the signal — and write_receipt is
+    what closes it. Idempotent; "written" is again decided by the read-back result."""
+    data = b"claim differential in progress\n"
+    parent = os.path.dirname(os.path.abspath(path))
+    os.makedirs(parent, exist_ok=True)
+    # The marker goes down, and is verified, before the previous receipt is destroyed: a
+    # receipt removed while the new marker never materialises leaves the differential
+    # invisible to the hook. Removing it afterwards closes the "pending without receipt"
+    # branch — a leftover receipt would hide every later differential for the life of the
+    # project — and a crash in between leaves both markers, which the next call repairs.
+    with open(path, "wb") as f:
+        f.write(data)
+    _verify_bytes(path, data)
+    try:
+        os.remove(os.path.join(parent, "receipt.json"))
+    except FileNotFoundError:
+        pass
+
+
 def write_receipt(receipt: Dict[str, Any], path: str) -> None:
     """Write to disk and compare the read-back. "Written" is defined by the read-back result,
-    not by the intent to write."""
+    not by the intent to write. A receipt on disk is what closes the differential, so the
+    pending marker goes away in the same step: a marker outliving its receipt would report
+    the same stale start on every later turn."""
     _write_canonical(receipt, path)
+    try:
+        os.remove(os.path.join(os.path.dirname(os.path.abspath(path)), "pending"))
+    except FileNotFoundError:
+        pass
 
 
 def _write_canonical(obj: Any, path: str) -> None:

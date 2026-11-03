@@ -47,17 +47,13 @@ class raises:
         return issubclass(et, self.exc)
 
 
-def run_hook(cwd, payload=None, stdin_text=None, env_extra=None):
+def run_hook(cwd, payload=None, stdin_text=None):
     """Run hook_entry.py for real: feed stdin, set cwd, return (exit code, stderr)."""
-    env = os.environ.copy()
-    env.pop("BD_CLAIMS_FILES", None)          # isolate the host env; tests inject their own
-    if env_extra:
-        env.update(env_extra)
     if stdin_text is None:
         stdin_text = json.dumps(payload or {})
     proc = subprocess.run([sys.executable, HOOK],
                           input=stdin_text.encode("utf-8"), cwd=cwd,
-                          capture_output=True, env=env, timeout=60)
+                          capture_output=True, env=os.environ.copy(), timeout=60)
     return proc.returncode, proc.stderr.decode("utf-8", errors="replace")
 
 
@@ -94,7 +90,7 @@ RECEIPT_GATE_FAIL = json.dumps({"schema_version": 2, "run_kind": "pairwise",
 # ── guard order and fast path (architect acceptance gates 1 and 2) ────────────────────
 def test_stop_hook_active_short_circuits_before_any_disk_check():
     """stop_hook_active=true → exit 0 with no report — even when the disk is in a
-    state that should exit 2 (pending without receipt). This proves the guard runs
+    state that should exit 2 (pending marker on disk). This proves the guard runs
     before every disk decision: otherwise Stop blocks → the model continues → the
     next Stop is blocked again, and after 8 times the host force-overrides the hook."""
     d, bd = make_project()
@@ -125,8 +121,11 @@ def test_no_marker_dir_exit_zero_fast():
 
 
 # ── three negative paths (architect acceptance gate 3 + exit-code mapping) ──────────────
-def test_pending_without_receipt_blocks_with_actionable_stderr():
-    """pending exists without a receipt → exit 2, stderr is actionable text.
+def test_unclosed_pending_blocks_with_actionable_stderr():
+    """pending exists → exit 2, stderr is actionable text. `pending` is the whole
+    in-flight state: it is written before a receipt and removed by write_receipt in
+    the same step that persists one, so its presence means the differential was
+    never closed.
     The literal text being present verbatim = the encoding chain is intact: the
     Windows console defaults to GBK, so if the hook does not pin UTF-8, decoding
     as UTF-8 here finds no keyword — a mojibake report is as good as unwritten."""
@@ -137,7 +136,7 @@ def test_pending_without_receipt_blocks_with_actionable_stderr():
         code, err = run_hook(d, stop_payload(d))
         assert code == 2, f"should block: exit code {code}"
         assert ".breakingdiff/pending" in err, f"the message must name the file to be actionable: {err!r}"
-        assert "[HK:PENDING_WITHOUT_RECEIPT]" in err, f"decision code lost: {err!r}"
+        assert "[HK:DIFFERENTIAL_UNCLOSED]" in err, f"decision code lost: {err!r}"
         assert "\ufffd" not in err, f"the message must be valid UTF-8 (a GBK console leaks U+FFFD): {err!r}"
     finally:
         shutil.rmtree(d, ignore_errors=True)
@@ -195,89 +194,22 @@ def test_empty_stdin_exits_zero():
         shutil.rmtree(d, ignore_errors=True)
 
 
-# ── mtime reconciliation: a claims-bearing file newer than the receipt → stale ─────────────
-def test_claims_newer_than_receipt_blocks():
-    """Control state (receipt newer) exits 0; target state (claims newer) exits 2 —
-    one fixture for both, the only difference is mtime order, so a red can only come
-    from the staleness decision."""
+# ── the closed state stays closed ───────────────────────────────────────────────
+def test_closed_receipt_ignores_later_claims_edits():
+    """Receipt on disk, `pending` gone, claims file edited afterwards → exit 0.
+    A closed differential describes the round that ended, not the working tree: if
+    the hook reconciled every later edit it would scan the repo on idle turns and
+    turn unrelated work into a permanent red — the loudest break of "if no
+    differential starts, it stays silent"."""
     d, bd = make_project()
     try:
         os.makedirs(bd)
         now = time.time()
         claims = os.path.join(d, "claims.md")
-        write(claims, "claim-bearing file", mtime=now - 1000)
-        write(os.path.join(bd, "receipt.json"), RECEIPT_OK, mtime=now - 500)
-        code, err = run_hook(d, stop_payload(d),
-                             env_extra={"BD_CLAIMS_FILES": "claims.md"})
-        assert (code, err) == (0, ""), "must not report stale when the receipt is newer"
-        os.utime(claims, (now + 100, now + 100))   # claims edited without rerunning the differential
-        code, err = run_hook(d, stop_payload(d),
-                             env_extra={"BD_CLAIMS_FILES": "claims.md"})
-        assert code == 2, f"a newer claims file must report stale: {code}"
-        assert "[HK:CLAIMS_STALE]" in err and "compare" in err, f"the message must give the action: {err!r}"
-    finally:
-        shutil.rmtree(d, ignore_errors=True)
-
-
-def test_staleness_via_real_git_status():
-    """A real git repo goes through the git status list path — BD_CLAIMS_FILES is a
-    test-injection back door, and the main path beyond the back door needs at least
-    one test pinning it, or the back door never touches the real chain."""
-    d, bd = make_project()
-    env = os.environ.copy()
-    env["GIT_AUTHOR_NAME"] = env["GIT_COMMITTER_NAME"] = "t"
-    env["GIT_AUTHOR_EMAIL"] = env["GIT_COMMITTER_EMAIL"] = "t@t"
-
-    def git(*args):
-        subprocess.run(["git", "-C", d, *args], capture_output=True,
-                       env=env, check=True)
-
-    try:
-        os.makedirs(bd)
-        git("init")
-        now = time.time()
-        claims = os.path.join(d, "src_spec.md")
-        write(claims, "# spec", mtime=now - 1000)
+        write(claims, "claim-bearing file", mtime=now + 100)   # newer than the receipt
         write(os.path.join(bd, "receipt.json"), RECEIPT_OK, mtime=now)
-        # untracked files are in the status list too (?? prefix); no commit needed
         code, err = run_hook(d, stop_payload(d))
-        assert (code, err) == (0, ""), f"must not report stale when the receipt is newer: {code} {err!r}"
-        os.utime(claims, (now + 100, now + 100))
-        code, err = run_hook(d, stop_payload(d))
-        assert code == 2 and "stale" in err, f"the git list path missed the staleness: {code} {err!r}"
-    finally:
-        shutil.rmtree(d, ignore_errors=True)
-
-
-def test_non_git_dir_without_claims_env_skips_staleness():
-    """A non-git directory with no injected list → skip the staleness check, exit 0.
-    With no list source, silence beats a false red — this is a deliberate degradation
-    (declared in the docstring), not a defect; this test pins "degradation does not
-    become a false red"."""
-    d, bd = make_project()
-    try:
-        os.makedirs(bd)
-        write(os.path.join(bd, "receipt.json"), RECEIPT_OK)
-        code, err = run_hook(d, stop_payload(d))
-        assert (code, err) == (0, ""), f"no list source must not produce a false red: {code} {err!r}"
-    finally:
-        shutil.rmtree(d, ignore_errors=True)
-
-
-def test_breakingdiff_files_excluded_from_staleness():
-    """Files under .breakingdiff/ itself never appear in the staleness list —
-    pending/receipt are always newer than the receipt (just written); without the
-    exclusion the hook would report stale forever, i.e. per-turn noise."""
-    d, bd = make_project()
-    try:
-        os.makedirs(bd)
-        now = time.time()
-        write(os.path.join(bd, "pending"), "", mtime=now)
-        write(os.path.join(bd, "receipt.json"), RECEIPT_OK, mtime=now - 100)
-        code, err = run_hook(d, stop_payload(d),
-                             env_extra={"BD_CLAIMS_FILES": os.path.join(
-                                 ".breakingdiff", "pending")})
-        assert (code, err) == (0, ""), f"the module's own files in the list would be a permanent false red: {code} {err!r}"
+        assert (code, err) == (0, ""), f"a closed differential must not be reopened by repo edits: {code} {err!r}"
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

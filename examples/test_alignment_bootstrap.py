@@ -26,7 +26,7 @@ looks for that assertion function in the test files. A marker must occur verbati
 the file so anyone reading this code can recompute. But the item-to-marker mapping is
 decided by the catalog below; the catalog is the judge, and it deserves the same care
 as the predicates: change one item's marker and the four quadrants move. The corpus is
-the Q-side contract docs (seven files in SPEC_FILES) and the P-side assertion test
+the Q-side contract docs (eight files in SPEC_FILES) and the P-side assertion test
 files themselves, read verbatim, nothing hand-made.
 
 Promises included in the predicates (mechanically checkable):
@@ -70,7 +70,7 @@ TEST_FILE = os.path.join(HERE, 'value_type_fingerprint_test.py')
 GUIDE_FILE = os.path.join(ROOT, 'references', 'writing-claims.md')
 MODULE_FILE = os.path.join(HERE, 'value_type_fingerprint.py')
 
-# The full Q-side corpus (2026-10-16 B2): the contract book + six reference source
+# The full Q-side corpus (2026-10-16 B2): the contract book + seven reference source
 # documents, each listed explicitly. Widening is a registration act — the paths are
 # hard-coded here, so an over- or under-registration is visible at a glance; a
 # directory scan would silently pull any file that wanders into references/ into the
@@ -85,6 +85,9 @@ SPEC_FILES = [
     os.path.join(ROOT, 'references', 'phase-transition.md'),
     os.path.join(ROOT, 'references', 'receipt-format.md'),
     os.path.join(ROOT, 'references', 'domain-mapping.md'),
+    # Added 2026-11-03 (1.1.1): the plan-vs-realization article. Its P6 freeze exception
+    # is a promise like any other, so it enters the Q-side corpus explicitly.
+    os.path.join(ROOT, 'references', 'plan-vs-realization.md'),
 ]
 SPEC_SRC = "breakingdiff/SKILL.md (the contract book frozen for this round)"
 TEST_SRC = "breakingdiff/examples/value_type_fingerprint_test.py (the assertion book)"
@@ -95,7 +98,7 @@ def _read(path):
         return f.read()
 
 
-# The strict Q corpus = the union of the seven files; only a newline is added between
+# The strict Q corpus = the union of the eight files; only a newline is added between
 # files, and each file's text stays verbatim
 SPEC_TEXT = "\n".join(_read(p) for p in SPEC_FILES)
 TEST_TEXT = _read(TEST_FILE)
@@ -170,6 +173,9 @@ TEST_FILES_ALL = [
     # witnesses, ratchet_points, vector_digest, receipt-byte invariance). Same reason:
     # a missed file = guarded items counted as gaps on the P side.
     os.path.join(ROOT, 'scripts', 'downstream_evidence_test.py'),
+    # Added 2026-11-03 (1.1.1): the plan-vs-realization instance. Same reason: a missed
+    # file = assertions there are counted as gaps on the P side.
+    os.path.join(HERE, 'plan_vs_realization_test.py'),
 ]
 TEST_CORPUS = "\n".join(_read(p) for p in TEST_FILES_ALL)
 
@@ -445,7 +451,7 @@ CATALOG = [
     # it, so func stays empty and it stays in dominance as a coverage gap.
     dict(key="hook.产物状态机",
          phrase="product state machine", topic="host hooks",
-         func="test_pending_without_receipt_blocks_with_actionable_stderr"),
+         func="test_unclosed_pending_blocks_with_actionable_stderr"),
     dict(key="hook.stop_hook_active 守卫",
          phrase="exit 0 immediately", topic="host hooks",
          func="test_stop_hook_active_short_circuits_before_any_disk_check"),
@@ -491,6 +497,22 @@ CATALOG = [
          phrase="toggling keep_vectors does not change a single byte of the receipt",
          topic="evidence hand-off",
          func="test_receipt_bytes_identical_when_keep_vectors_toggled"),
+    # ---- added 2026-11-03: plan vs realization (1.1.1, the P6 freeze exception) ----
+    # All three land in common once the SKILL.md section exists: each promise is verbatim
+    # in SKILL.md and pinned by a named assertion in plan_vs_realization_test.py
+    # (registered in TEST_FILES_ALL below).
+    dict(key="计划对照.冻结才独立",
+         phrase="a freeze verifiable at compare time",
+         topic="plan vs realization",
+         func="test_frozen_digest_yields_four_quadrants"),
+    dict(key="计划对照.未冻结回落自证",
+         phrase="Without a freeze the pair is one hand writing both accounts afterwards",
+         topic="plan vs realization",
+         func="test_unfrozen_pair_falls_back_to_self_consistency"),
+    dict(key="计划对照.冻结被改必须报错",
+         phrase="a mismatch raises, never compares",
+         topic="plan vs realization",
+         func="test_plan_edited_after_freeze_raises_before_comparing"),
 ]
 
 # Section title → the topic of the commitment items it carries.
@@ -514,6 +536,7 @@ SECTION_TOPICS = {
     "Forged PoC and capability declaration table: effective against sloppiness ≠ effective against deliberate forgery": "ledger",
     "Reconciliation between the delivery gate and the PoC": "declaration",
     "Under-reporting does not only miss real problems; it can invent them": "mutation",
+    "Plan vs realization": "plan vs realization",
 }
 
 KEYS = [e["key"] for e in CATALOG]
@@ -719,7 +742,7 @@ def self_coverage_gate():
     from coverage_guard import require_covered
 
     # Change footprint: real section titles. Extracted only from SKILL.md itself — since
-    # B2 SPEC_TEXT is a seven-file union, but this gate audits the bridge "SKILL.md
+    # B2 SPEC_TEXT is an eight-file union, but this gate audits the bridge "SKILL.md
     # sections vs catalog", while each references file has its own section ecosystem off
     # this bridge; if the footprint grew with the corpus, their titles would be swept in
     # as false gaps.

@@ -1,6 +1,6 @@
 # Host hook installation and runtime details
 
-The companion detail page for the "Host hook (optional install)" section of SKILL.md. The decision semantics and the honest degradation follow the body of SKILL.md; this page carries only the installation steps and the field conventions.
+The optional Stop hook in full: the installation snippet, the `.breakingdiff/` markers the decision reads, the judge order with its exit codes, and the boundary of what the hook can honestly buy.
 
 ## Installation snippet (Claude Code, a manual user action)
 
@@ -24,8 +24,10 @@ On Windows, if the direct command trips over shell quoting, use the PowerShell w
 
 ```json
 { "type": "command",
-  "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"python scripts/hook_entry.py\"" }
+  "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"python scripts/hook_entry.py; exit $LASTEXITCODE\"" }
 ```
+
+The trailing `; exit $LASTEXITCODE` is not cosmetic: without it the wrapper returns 1 for any non-zero Python exit, and the host only blocks on exit 2 — every injection would be silently downgraded to a no-op.
 
 The path in `scripts/hook_entry.py` is relative to the project root (Claude Code runs hook commands with the project root as cwd). Python must be on PATH.
 
@@ -37,26 +39,27 @@ Three preconditions: it applies to the plugin form only, and the root variable r
 
 ## The `.breakingdiff/` working directory convention
 
-The disk state machine behind the hook decision (relative to the project root):
+The hook decision is a **product state machine** (disk markers, not transcript semantics). The disk layout, relative to the project root:
 
 | File | Who writes it | When |
 | --- | --- | --- |
-| `.breakingdiff/pending` | agent | Write it before starting a claim differential (content is irrelevant; presence is the marker) |
-| `.breakingdiff/receipt.json` | write_receipt in `scripts/receipt.py` | compare finishes and writes to disk |
+| `.breakingdiff/pending` | begin_differential in `scripts/receipt.py` | written when the differential starts (content is irrelevant; presence is the marker); removed when `write_receipt` persists a receipt |
+| `.breakingdiff/receipt.json` | write_receipt in `scripts/receipt.py` | compare finishes and writes to disk; cleared when a new differential starts |
 | `.breakingdiff/expected.json` | write_expected in `scripts/receipt.py` | blind-written expectation (optional, used by reconcile) |
 
 ## Judge order and exit codes
 
     1. stdin is empty or not JSON → exit 0 silently
-    2. stop_hook_active=true → exit 0 (prevents a Stop block loop; before any disk I/O)
-    3. no marker (`.breakingdiff/` missing) → exit 0 in a split second (first fast-path branch; Stop fires every turn, so slow means slow every turn)
-    4. pending without receipt → exit 2 + actionable text on stderr (receipt internal 2 = runtime error, whose shape is "no receipt produced")
+    2. stop_hook_active=true → exit 0 immediately (prevents a Stop block loop; before any disk I/O)
+    3. no marker (`.breakingdiff/` missing) → exit 0 instantly (first fast-path branch; Stop fires every turn, so slow means slow every turn)
+    4. pending marker on disk → exit 2 + feed actionable text back over stderr (a differential started and no receipt closed it; receipt internal 2 = runtime error, whose shape is "no receipt produced")
     5. receipt gate fails → exit 2 + the difference fed back on stderr (receipt internal 1 → hook 2)
-    6. claims newer than the receipt → exit 2 + stderr (stale artifact)
-    7. otherwise → exit 0
+    6. otherwise → exit 0
 
-Whether a claims file list is carried: the environment variable `BD_CLAIMS_FILES` (`os.pathsep`-separated, relative to cwd, injected by tests and special hosts) takes precedence; otherwise `git status --porcelain` (including untracked files). Not a git repository / git unavailable / timeout (10s) → empty list and skip the staleness check — with no list source, silence beats a false red.
+`pending` on disk is the whole in-flight state: `begin_differential` writes it before removing a previous receipt, and `write_receipt` removes it in the same step that persists the receipt. A crash that leaves both markers reads as open and the next begin/write repairs it. Once closed, later edits to claim-bearing files are not stale against the receipt: it describes the round that ended, not the working tree, and reconciling it on idle turns would turn unrelated edits into a permanent red — the loudest way to break the promise above.
 
 The transcript lags asynchronously at Stop time (the official docs confirm it); the decision looks only at disk artifacts and never reads transcript semantics — disk checks are deterministic, sub-second, and have no transcript dependency.
 
-The honest degradation semantics of the hook decision (a stale-artifact reminder rather than a requirements adjudicator, raising the cost of sloppiness without raising the cost of forgery, a backstop rather than a replacement, same root cause as the three gates) follow the "Host hook" section of SKILL.md; this page does not expand on them.
+## Honest degradation
+
+The hook is a staleness reminder, not a requirements judge: it raises the cost of sloppiness, not the cost of forgery. If no differential starts, it stays silent; a red says "rerun the compare", never "the claim failed". It is a backstop rather than a replacement — the same root cause as the three gates in the body of the skill, where a cheap disk marker beats a promise the agent can talk its way around.

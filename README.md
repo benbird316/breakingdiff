@@ -13,10 +13,9 @@ This file is for **humans**: read it when you want to change the tool, add a new
 
 ## Why it looks like this: the core insight
 
-The tooling a change normally runs through — parser, type checker, compiler, test suite, CI — shares one premise: **change raises an error**.
-If the parser, the type checker, the compiler, and CI are all green, the change ships.
+The checks a change normally has to pass — parser, type checker, compiler, test suite, CI — share one premise: **change raises an error**. Green across all of them is what those tools exist to produce, and it is what the change ships on.
 
-The real blank spot is on the other side: **the change is legal, raises nothing, and nobody stops it**.
+None of them was built to say anything about the other side — a change that raises no error at all. That is the blank spot: **the change is legal, raises nothing, and nobody stops it**.
 
 ```
 The key is still there · the type is still int · the tests are still green — but the semantics have quietly changed
@@ -45,11 +44,11 @@ per-instance decision; the rule is P6 (independence) in [`SKILL.md`](SKILL.md), 
 
 **Confirming a port did not drift.** A rewrite is the one change where the test suite stops being evidence: the tests are usually rewritten along with the code, so a green run says the new tests agree with the new code, not that the two implementations agree with each other. The claim spec is the part that does not move — `casestudy/port/claims.json` is read unchanged by the Python reference, the Go port and the Rust port, and the three readouts must match point by point. Tests bind to a language; claims do not. A boundary that is off by one shifts a witness (`[12,13,14]` → `[13,14,15]`) while the count stays at 3 — which is exactly the drift a totals-only gate lets through.
 
-**Auditing a change that raised nothing.** Parsers, type checkers, compilers and test suites all stop illegal changes; that surface is crowded. The blank one is the change that raises nothing at all — the key is still there, the type is still int, the suite is still green, and the semantics have moved. That is why "the change is legal and raises nothing" (P3) is the precondition this tool cannot run without, and why the readout is quadrants rather than a verdict: `casestudy/k8s/` shows removals landing in divergence on an existence baseline, and `scripts/delivery_gate.py` applies the same quadrants to a spec promise against test assertions inside one delivery.
+**Auditing a change that raised nothing.** Parsers, type checkers, compilers and test suites all stop illegal changes; that surface is crowded. The one they leave open is the change that raises nothing at all — an existence check still passes, because everything it asks about is still there. That is why "the change is legal and raises nothing" (P3) is the precondition this tool cannot run without, and why the readout is quadrants rather than a verdict: `casestudy/k8s/` is where that difference shows up, and `scripts/delivery_gate.py` applies the same quadrants to a spec promise against test assertions inside one delivery.
 
 **Checking an agent's report against the artifact it produced.** An agent writes the code, writes the tests, runs them green, and reports done. The green is real, and it is not evidence: both sides came from the same source, so agreement only shows that source is consistent with itself. `scripts/delivery_gate.py` is this situation turned into a checkpoint, and its whole move is to swap the opponent — a mechanical extraction (AST, grep, a frozen spec) replaces the second reading, never another agent's, because the same model session is the same source.
 
-The mechanism is domain-agnostic because nothing in it knows about code; engineering clauses, theory definitions and research claims run through it unchanged. Those three demands are simply where somebody is stuck today.
+Engineering clauses, theory definitions and research claims go through it unchanged — the same claim, the same quadrants, a different material; [`references/domain-mapping.md`](references/domain-mapping.md) carries the mapping out of programming.
 
 ---
 
@@ -189,6 +188,24 @@ To run one example, run it from the repository root — `python examples/<name>.
 copying it out: `value_type_fingerprint.py` reads shared fixtures from `examples/data/`, and
 `forgery_poc.py` has no paired `_test.py`, so a single copied file reproduces neither.
 
+## Optional: host hook
+
+A Stop hook can remind the agent to rerun the compare when claims move past the recorded receipt.
+It is a staleness reminder, not a requirements adjudicator, and it is entirely optional — nothing
+in the differential depends on it. Add this to `.claude/settings.json` (project or `~/.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "python scripts/hook_entry.py" } ] }
+    ]
+  }
+}
+```
+
+On Windows, if quoting trips the direct command, use `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "python scripts/hook_entry.py; exit $LASTEXITCODE"` instead — the trailing segment keeps the Python exit code, and without it every block is downgraded to a silent no-op. Hooks configuration changes take effect only through the `/hooks` menu, and a skill cannot register itself. The full snippet, the disk markers it reads, and the exit-code table → read `references/hooks.md`.
+
 ---
 
 ## Directory layout
@@ -208,7 +225,7 @@ breakingdiff/
 ├── examples/           ← runnable examples, the tests that pin them, and the docaudit claims fixture
 ├── casestudy/          ← 5 formal case studies (pdg / llama / malecns / port / k8s) + a hubble reference prototype (single script, no teaching doc) + 5 teaching docs + README (read on demand; entry point in that directory's README)
 ├── probes/             ← blind-run task sheets: cold-start usability acceptance for context-free agents (assets public, scoring material local)
-└── references/         ← 8 on-demand method docs
+└── references/         ← 10 on-demand method docs
 ```
 
 Per-file "what it is · when to look" → [`INDEX.md`](INDEX.md). How to pick a case → the selector table above.
@@ -349,8 +366,8 @@ checked by `scripts/version_stamp.py check`).
 
 Released tool; the core has no external dependencies and uses only the standard library.
 
-**Where to ask.** This release is supported as an archive: the repository's issue tracker is not
-monitored, so a question arrives as a diff plus the gate output — and the gate output is usually the
-useful half. If you are taking the project over, read
+**Where to ask.** The tool is still being iterated on, and this repository's issue tracker is not
+monitored: a question is more likely to land if it arrives as a diff plus the gate output — and the
+gate output is usually the useful half. If you are taking the project over, read
 [`CHANGELOG.md`](CHANGELOG.md) first: it records which defense line was ever proven and which was
 only written down.

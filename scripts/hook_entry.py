@@ -10,8 +10,8 @@ a pure disk check: deterministic, sub-second, transcript-free.
 
 Convention: a `.breakingdiff/` working directory (relative to the project root):
 
-    pending        written by the agent right before it does the claim differential
-                   (required by the SKILL.md workflow); content is unconstrained
+    pending        written when the claim differential starts (begin_differential
+                   in scripts/receipt.py); content is unconstrained
     receipt.json   the receipt persisted after compare (scripts/receipt.py)
 
 Judge order (order is the performance budget; the first two never touch disk):
@@ -26,63 +26,55 @@ Judge order (order is the performance budget; the first two never touch disk):
     3. no .breakingdiff/ marker → exit 0, immediate. The fast path is the first
                                   branch: Stop fires every turn, slow = every turn
                                   is slow
-    4. pending without receipt  → exit 2 + actionable stderr
-                                  (receipt internal 2 = runtime-error shape: no
+    4. pending marker present    → exit 2 + actionable stderr
+                                  (a differential started and no receipt closed
+                                  it; receipt internal 2 = runtime-error shape: no
                                   receipt was produced)
     5. gate fails               → exit 2 + stderr feeds the diff back
                                   (receipt internal 1 → hook layer 2 mapping; Claude
                                   Code only blocks on exit 2, stderr feeds the model)
-    6. claims files newer than receipt → exit 2 + stderr (artifacts stale: changed
-                                  without rerunning the differential)
-    7. otherwise                → exit 0
+    6. otherwise                → exit 0
 
-Claim-file list sources (by priority):
+`pending` on disk is the whole "in flight" state: `write_receipt` removes it in
+the same step that persists the receipt, and `begin_differential` writes it
+before removing a previous receipt. A crash that leaves both markers is treated
+as open (exit 2), and the next begin/write repairs it — the pair is never read
+as "closed". Once the differential is closed, later edits to claim-bearing
+files are not stale against it: the closed receipt describes the round that
+ended, not the working tree.
 
-    1. env BD_CLAIMS_FILES (os.pathsep separated, relative to cwd; tests and special
-       hosts inject it)
-    2. git status --porcelain (cwd; includes untracked files). Non-git repo / git
-       unavailable / timeout → empty list, **staleness check skipped** — a silent
-       degradation: with no list source, silence beats a false red (pinned by
-       test_non_git_dir_without_claims_env_skips_staleness)
-
-Honest degradation (definitions live in the SKILL.md "Host hooks" section; not
-restated here): the hook is a staleness reminder, not a requirement judge; if the
-agent never writes pending, the hook stays silent — it raises the cost of
-carelessness, not of forgery; it is a fallback, not a replacement.
+Honest degradation (definitions live in references/hooks.md; not restated here):
+the hook is a staleness reminder, not a requirement judge; if no differential
+starts, the hook stays silent — it raises the cost of carelessness, not
+of forgery; it is a fallback, not a replacement.
 
 stderr encoding: the Windows console defaults to a legacy code page; non-ASCII
 exit-2 feedback would be read as mojibake — as good as unwritten. Pin
 reconfigure(utf-8, errors="replace") on the very first line of the entry point.
 
-Usage (the complete snippet is in the SKILL.md "Host hooks (optional installation)"
-section):
+Usage (the complete snippet and the Windows PowerShell wrapper are in
+references/hooks.md):
 
     command: python scripts/hook_entry.py
     Windows wrapper variant:
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "python scripts/hook_entry.py"
+      powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "python scripts/hook_entry.py; exit $LASTEXITCODE"
 
 Command line: python hook_entry.py --self-check    # run this module's own regression
 """
 import json
 import os
-import subprocess
 import sys
 
 BD_DIR = ".breakingdiff"
 PENDING_NAME = "pending"
 RECEIPT_NAME = "receipt.json"
-CLAIMS_ENV = "BD_CLAIMS_FILES"
-GIT_TIMEOUT_S = 10          # a hung git must not stall every turn; on timeout, treat it as no list
 
-MSG_PENDING = ("[HK:PENDING_WITHOUT_RECEIPT] .breakingdiff/pending is still there but there is no receipt — "
-               "the previous claim differential never wrote a receipt. Run compare and persist it with "
-               "write_receipt; if this turn truly has no differential, delete the stale pending marker.")
+MSG_UNCLOSED = ("[HK:DIFFERENTIAL_UNCLOSED] .breakingdiff/pending is still on disk — a claim differential "
+                "started and no receipt closed it. Run compare and persist the receipt with write_receipt; "
+                "if this turn truly has no differential, delete the stale pending marker.")
 MSG_GATE = ("[HK:RECEIPT_GATE_FAILED] receipt gate failed (expected.surprise=true), differences: {diffs}. "
             "Re-read the report to fix the divergence or amend the expectation, then rerun compare and "
             "persist a new receipt.")
-MSG_STALE = ("[HK:CLAIMS_STALE] claims-bearing files are newer than the latest receipt — stale artifacts "
-             "(changed without rerunning the differential): {files}. Rerun compare and persist a new "
-             "receipt, or delete pending.")
 MSG_BROKEN = ("[HK:BROKEN_RECEIPT] receipt cannot be parsed (runtime error): {err}. A broken receipt is "
               "not a pass — rerun compare to persist a new receipt, or delete the broken files under "
               ".breakingdiff/.")
@@ -99,46 +91,6 @@ def _stderr_text(payload) -> str:
     return "; ".join(parts) if parts else json.dumps(payload, ensure_ascii=False)
 
 
-def _claims_files(cwd: str):
-    """List of claims-bearing files. The env var wins (tests inject it); otherwise
-    git status. Drop any .breakingdiff/ paths from the list: pending/receipt are
-    always newer than the receipt (just written), and keeping them would turn the
-    staleness check permanently red."""
-    raw = os.environ.get(CLAIMS_ENV)
-    if raw:
-        names = [n for n in raw.split(os.pathsep) if n.strip()]
-    else:
-        names = _git_status_names(cwd)
-    return [n for n in names
-            if not (n == BD_DIR or n.startswith(BD_DIR + "/")
-                    or n.startswith(BD_DIR + "\\"))]
-
-
-def _git_status_names(cwd: str):
-    """The git status --porcelain list (untracked files included). Failure or
-    timeout yields an empty list — missing git is normal (.breakingdiff works in
-    non-git projects too), not an error."""
-    cmd = ["git", "-C", cwd, "-c", "core.quotepath=false", "status", "--porcelain"]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, timeout=GIT_TIMEOUT_S)
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    if proc.returncode != 0:
-        return []
-    out = []
-    for line in proc.stdout.decode("utf-8", errors="replace").splitlines():
-        if len(line) < 4:
-            continue
-        path = line[3:].strip()
-        if " -> " in path:                 # rename: take the new name
-            path = path.split(" -> ", 1)[1]
-        if path.startswith('"') and path.endswith('"'):
-            path = path[1:-1]
-        if path:
-            out.append(path)
-    return out
-
-
 def decide(payload) -> "tuple[int, str]":
     """Pure decision: returns (exit code, stderr text). Empty stderr = silent."""
     if payload.get("stop_hook_active"):
@@ -149,8 +101,8 @@ def decide(payload) -> "tuple[int, str]":
         return 0, ""
     pending = os.path.join(bd, PENDING_NAME)
     receipt = os.path.join(bd, RECEIPT_NAME)
-    if os.path.exists(pending) and not os.path.exists(receipt):
-        return 2, MSG_PENDING
+    if os.path.exists(pending):
+        return 2, MSG_UNCLOSED
     if os.path.exists(receipt):
         try:
             with open(receipt, "rb") as f:
@@ -160,25 +112,7 @@ def decide(payload) -> "tuple[int, str]":
         exp = data.get("expected")
         if isinstance(exp, dict) and exp.get("surprise"):
             return 2, MSG_GATE.format(diffs=_stderr_text(exp))
-    # staleness reconciliation: only meaningful with a receipt; skip when the list
-    # source is missing (honest degradation)
-    if os.path.exists(receipt):
-        try:
-            receipt_mtime = os.path.getmtime(receipt)
-        except OSError:
-            receipt_mtime = 0.0
-        newer = [n for n in _claims_files(cwd)
-                 if _mtime_of(os.path.join(cwd, n)) > receipt_mtime]
-        if newer:
-            return 2, MSG_STALE.format(files=", ".join(newer[:8]))
     return 0, ""
-
-
-def _mtime_of(path: str) -> float:
-    try:
-        return os.path.getmtime(path)
-    except OSError:
-        return 0.0                        # deleted files in the list do not affect staleness
 
 
 def main() -> int:

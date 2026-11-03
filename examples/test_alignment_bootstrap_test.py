@@ -181,6 +181,11 @@ COMMON_ADDED = [
     # 2026-10-30: opt-in downstream evidence hand-off, promised + pinned
     "下游证据.opt-in 拿回逐点向量",
     "下游证据.摘要与向量不进门禁",
+    # 2026-11-03: the P6 freeze exception (1.1.1). All three are verbatim in the new
+    # SKILL.md section and pinned by plan_vs_realization_test.py.
+    "计划对照.冻结才独立",
+    "计划对照.未冻结回落自证",
+    "计划对照.冻结被改必须报错",
 ]
 
 # Recaclulated 2026-10-15: catalog 52 items (delivery gate 10 + coverage-ratio
@@ -194,8 +199,9 @@ COMMON_ADDED = [
 # gate" has no test yet (document batch A lands docs only); the two conclusion-discipline
 # items are a duality that only a human reviewing the transcript can catch (a mechanical
 # test cannot pin "did it make up a number"), so by the provenance precedent, all five
-# stay in dominance.
-EXPECT = dict(common=52, divergence=4, dominance=19, neither=0)
+# stay in dominance. 2026-11-03: the three plan-vs-realization items enter at common
+# (promised in SKILL.md, pinned by plan_vs_realization_test.py) → 55.
+EXPECT = dict(common=55, divergence=4, dominance=19, neither=0)
 
 
 # ---------------------------------------------------------------- provenance binding
@@ -345,14 +351,14 @@ def test_mutation_stays_local():
 
 # ---------------------------------------------------------------- B2: Q-side corpus expansion + Q-anchor orphan readout
 # Spec source: the B2 spec-freeze batch of this repo (see the matching CHANGELOG entry).
-# This batch only expands, never moves: the Q side grows from one file to seven,
+# This batch only expands, never moves: the Q side grows from one file to eight,
 # explicitly enumerated, and a new "Q anchor orphan" readout is added — if a phrase is
 # moved or rewritten while CATALOG does not follow, the old four quadrants only read it
 # as "the test is finer than the spec" (divergence), a silent failure; the orphan readout
 # pulls that into an explicit red. All fixtures below are hand-made; neither the live
 # CATALOG nor SPEC_FILES is touched.
 
-# The spec-freeze explicit list of six references (glob forbidden; hard-coded here, the
+# The spec-freeze explicit list of seven references (glob forbidden; hard-coded here, the
 # implementation follows it)
 REQUIRED_REFS = (
     "writing-claims.md",
@@ -361,6 +367,7 @@ REQUIRED_REFS = (
     "phase-transition.md",
     "receipt-format.md",
     "domain-mapping.md",
+    "plan-vs-realization.md",
 )
 
 # Hand-made fixture for the orphan readout: two orphans (phrases found in no corpus) plus
@@ -379,12 +386,12 @@ B2_FX_CORPUS_MISSING = "red-fixture findable anchor gamma · right here in this 
 B2_FX_CORPUS_ALL_FOUND = "\n".join(e["phrase"] for e in B2_FX_CATALOG)
 
 
-def test_spec_files_explicitly_enumerates_seven_sources():
-    """C1: SPEC_FILES must be seven explicitly enumerated files, not a glob scan.
+def test_spec_files_explicitly_enumerates_eight_sources():
+    """C1: SPEC_FILES must be eight explicitly enumerated files, not a glob scan.
 
-    Widening is a registration act: all seven listed one by one, the total exactly seven,
+    Widening is a registration act: all eight listed one by one, the total exactly eight,
     each really on disk — asserted one by one, so one missing turns red; the total is
-    fixed at seven, so files a glob drags in also turn red. But a correct list produced by
+    fixed at eight, so files a glob drags in also turn red. But a correct list produced by
     a scan means nothing was registered (files that wander into references/ later are
     silently included), so the source code must also be checked for a glob call.
     """
@@ -393,8 +400,8 @@ def test_spec_files_explicitly_enumerates_seven_sources():
     assert names.count("SKILL.md") == 1, f"SKILL.md should be listed exactly once, got {names}"
     for ref in REQUIRED_REFS:
         assert ref in names, f"references/{ref} did not enter SPEC_FILES — the Q-side corpus is blind to it"
-    assert len(A.SPEC_FILES) == 7, \
-        f"SPEC_FILES should be exactly 7 items (SKILL.md + six references), got {len(A.SPEC_FILES)}: {names}"
+    assert len(A.SPEC_FILES) == 8, \
+        f"SPEC_FILES should be exactly 8 items (SKILL.md + seven references), got {len(A.SPEC_FILES)}: {names}"
     for p in A.SPEC_FILES:
         assert os.path.isfile(p), f"SPEC_FILES registered a file that does not exist: {p}"
         rel = os.path.relpath(p, A.ROOT)
@@ -434,12 +441,12 @@ def test_scan_primitive_criterion_covers_iglob_and_rglob():
     assert _scan_primitive_calls(src) == {"iglob", "rglob"}
 
 
-def test_spec_text_is_union_corpus_of_the_seven_files():
-    """C1: the strict Q judgment must consume the merged text of the seven files, no
+def test_spec_text_is_union_corpus_of_the_eight_files():
+    """C1: the strict Q judgment must consume the merged text of the eight files, no
     longer just SKILL.md.
 
     The reverse must be checked too: no other root md and no hand-made string may enter
-    the corpus — the merge boundary is exactly those seven files in SPEC_FILES; one page
+    the corpus — the merge boundary is exactly those eight files in SPEC_FILES; one page
     more is a silent expansion.
     """
     skill_text = A._read(os.path.join(A.ROOT, "SKILL.md"))
@@ -530,11 +537,12 @@ def test_live_repo_has_zero_q_anchor_orphans():
     The phrase registration discipline guarantees every phrase was verbatim findable at
     its old location; after the expansion the set is a superset, so orphans can only come
     from a CATALOG typo or a missing file in corpus loading. Measured 2026-10-16: all 67
-    phrases are findable inside the seven-file union; this should land at 0.
+    phrases were findable inside the then-seven-file union; 2026-11-03 adds three more
+    (70 total) and one file. This should land at 0.
     """
     orphans = A.q_anchor_orphans()
     assert orphans == [], \
-        f"the live repo has Q anchor orphans: {orphans} — the CATALOG phrases are no longer findable in the seven-file corpus"
+        f"the live repo has Q anchor orphans: {orphans} — the CATALOG phrases are no longer findable in the eight-file corpus"
 
 
 def test_main_reports_zero_orphan_count_explicitly():
@@ -562,7 +570,7 @@ def test_spec_wide_stays_superset_without_double_counting():
 
     After the set expansion writing-claims.md is already in the strict corpus; concatenating
     the guide again in the relaxed corpus the old way would count the same source twice.
-    The criterion must check both ends: the other five references must be present (the old
+    The criterion must check both ends: the other six references must be present (the old
     SPEC_WIDE lacked them), and the guide's full text must appear exactly once (more is a
     duplicate-count surface, less means the source was lost).
     """

@@ -1,14 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-hooks consistency contract — executable assertions over the three hand-copied
+hooks consistency contract — executable assertions over the two hand-copied
 judge-order copies (M-H1/H2/H3)
 ===============================================================
-The hook's judge order is hand-copied in three places: the scripts/hook_entry.py
-docstring (the canonical copy, a 7-item numbered list), the "Judge order and exit
-codes" section of references/hooks.md, and the condensed paragraph in the "Host
-hooks" section of SKILL.md. All three are synced by hand, and whoever changes the
-judge order will not always remember to change the other two — which copy a reader
-lands on decides the hook's semantics, and that is the hole this contract plugs.
+The hook's judge order is hand-copied in two places: the scripts/hook_entry.py
+docstring (the canonical copy, a 6-item numbered list) and the "Judge order and
+exit codes" section of references/hooks.md. Both are synced by hand, and whoever
+changes the judge order will not always remember to change the other — which copy
+a reader lands on decides the hook's semantics, and that is the hole this contract
+plugs.
+
+B5 froze a third copy: a condensed paragraph in the "Host hooks" section of
+SKILL.md. That copy was thawed on 2026-11-03 when the installation and decision
+detail moved out of the execution body into references/hooks.md; the condensed
+paragraph no longer exists, so the contract now covers the two live copies above.
+The thaw is recorded in CHANGELOG.md.
 
 This file is the red end of B5's TDD: the assertions are frozen per B5 spec
 (2026-10-17) §3 and the live documentation was not yet complete, so it should run
@@ -18,29 +24,24 @@ not touched again.
 
 Division of labour among the three assertions (each reports what is missing; none
 substitutes for another):
-  M-H1 entry sets equal — two structured copies are checked entry by entry
+  M-H1 entry sets equal — the two structured copies are checked entry by entry
     against the frozen anchor table (condition keyword + exit code, indexed by
-    entry number); all seven condensed anchors must be present in SKILL.md
-    (condensing may shorten wording, not drop entries). Missing anchors are named
-    one by one and all at once, so a doc fixer does not need N runs to see the
-    full picture.
-  M-H2 same order — the structured copies must parse in ascending order 1..7.
+    entry number); a missing anchor or a misplaced exit code is named one by one
+    and all at once, so a doc fixer does not need N runs to see the full picture.
+  M-H2 same order — the structured copies must parse in ascending order 1..6.
     Parsing keeps file line order; a scrambled number means the judge order was
     swapped: the first two fast paths never touch disk, so order is the
     performance budget, and swapping it makes every turn's Stop pay disk IO for
-    nothing. On the SKILL.md side, the first occurrence of the seven anchors must
-    have strictly increasing offsets; when an anchor is missing, "the order of the
-    seven anchors" is undefined, and the missing item is named by M-H1 — no
-    fabricating an order red from an incomplete set here.
-  M-H3 exit-code mapping consistent — three scopes (the whole docstring /
-    the judge-order section of hooks.md / the host-hook section of SKILL.md) each
-    contain both the literal "receipt internal 1" and "receipt internal 2".
+    nothing.
+  M-H3 exit-code mapping consistent — two scopes (the whole docstring / the
+    judge-order section of hooks.md) each contain both the literal "receipt
+    internal 1" and "receipt internal 2".
     The literal anchors are the contract: internal 1 is a failing gate, internal 2
     is a runtime error; a combined "internal 1/2" form or a semantic paraphrase
     means whoever greps the anchors during an incident finds nothing — as good as
     an unwritten mapping.
 
-Incomplete parsing (entry count ≠ 7, missing or duplicate numbers) counts as red;
+Incomplete parsing (entry count ≠ 6, missing or duplicate numbers) counts as red;
 never degrade it to SKIP — an incomplete copy is more dangerous than a drifted
 one, and silently skipping mixes "checked" with "did not check" into one output.
 Unreadable files and import failures are a different matter: not having run is not
@@ -62,21 +63,14 @@ sys.path.insert(0, HERE)
 
 # Frozen anchor table (B5 spec freeze §3.1; only a spec revision may change it, and
 # an implementation must not privately edit it to go green):
-# (entry number, judge-order line condition anchor, SKILL.md condensed anchor,
-#  frozen exit code).
-# Entry 3 uses "no marker" as the SKILL anchor and entry 4 the merged phrase
-# "pending without receipt"; both are existing condensed wordings — the state
-# machine sentence at the start of that section writes "write pending before the
-# differential" first, and a bare pending anchor would first occur before
-# stop_hook_active, skewing M-H2's position-order check (scheduler decision).
+# (entry number, judge-order line condition anchor, frozen exit code).
 FROZEN_TABLE = (
-    (1, "stdin", "stdin", 0),
-    (2, "stop_hook_active", "stop_hook_active", 0),
-    (3, ".breakingdiff", "no marker", 0),
-    (4, "pending", "pending without receipt", 2),
-    (5, "gate", "gate", 2),
-    (6, "claims", "claims", 2),
-    (7, "otherwise", "otherwise", 0),
+    (1, "stdin", 0),
+    (2, "stop_hook_active", 0),
+    (3, ".breakingdiff", 0),
+    (4, "pending", 2),
+    (5, "gate", 2),
+    (6, "otherwise", 0),
 )
 
 # M-H3 mapping literals: a paired criterion; either scope missing half counts as missing
@@ -150,7 +144,7 @@ def _section(text, heading_prefix, rel):
 def _parse_ordered(text, where):
     """Parse judge-order lines one by one; return [(entry number, condition, exit
     code)]. A structurally incomplete copy goes red on the spot: an entry count
-    other than 7, or missing or duplicate numbers, means the copy is too broken for
+    other than 6, or missing or duplicate numbers, means the copy is too broken for
     the anchor table to check, and continuing would only produce plausible-looking
     wrong conclusions."""
     found = []
@@ -159,10 +153,10 @@ def _parse_ordered(text, where):
         if m:
             found.append((int(m.group(1)), m.group(2), int(m.group(3))))
     nums = [no for no, _, _ in found]
-    if len(found) != 7 or sorted(nums) != list(range(1, 8)):
+    if len(found) != 6 or sorted(nums) != list(range(1, 7)):
         raise HooksContractError(
             f"[hooks_contract] {where} judge order parsed incomplete: got {len(found)} entries "
-            f"(numbers {nums}), expected 7 entries numbered 1..7 with no gaps.\n"
+            f"(numbers {nums}), expected 6 entries numbered 1..6 with no gaps.\n"
             "A judge-order line must look like " + '"    1. condition → exit 0" '
             "(4-space indent, number, →, and exit on the same line).")
     return found
@@ -175,7 +169,7 @@ def _check_frozen_table(entries, where, reds):
     judge-order lines are swapped, anchor and exit code still match per entry, and
     the red lands only in M-H2 without collateral damage."""
     by_no = {no: (cond, code) for no, cond, code in entries}
-    for no, anchor, _, frozen_code in FROZEN_TABLE:
+    for no, anchor, frozen_code in FROZEN_TABLE:
         cond, code = by_no[no]
         if anchor not in cond:
             reds.append(f'{where} entry {no} condition "{cond}" lacks anchor "{anchor}"')
@@ -186,8 +180,7 @@ def _check_frozen_table(entries, where, reds):
 # ------------------------------------------------------------ the three assertions
 def test_m_h1_entry_sets_match():
     """M-H1 entry sets equal. Red conditions: a structured copy's entry lacks an
-    anchor or has a misplaced exit code, or the SKILL.md condensed anchors are
-    missing — condensing may shorten wording, not drop entries."""
+    anchor or has a misplaced exit code."""
     reds = []
 
     doc_entries = _parse_ordered(_hook_entry_doc(),
@@ -199,14 +192,9 @@ def test_m_h1_entry_sets_match():
     md_entries = _parse_ordered(md_section, "references/hooks.md")
     _check_frozen_table(md_entries, "references/hooks.md", reds)
 
-    skill_section = _section(_read("SKILL.md"), "Host hooks", "SKILL.md")
-    reds.extend(
-        f"SKILL.md host-hook section is missing entry {no} condensed anchor \"{anchor}\""
-        for no, _, anchor, _ in FROZEN_TABLE if anchor not in skill_section)
-
     if reds:
         raise HooksContractError(
-            "[hooks_contract] M-H1 entry sets equal: the three copies do not match the frozen anchor table.\n"
+            "[hooks_contract] M-H1 entry sets equal: the copies do not match the frozen anchor table.\n"
             + "\n".join("  - " + r for r in reds)
             + "\nThe anchor table in this file's FROZEN_TABLE is authoritative (frozen); "
               "fix the docs to match it, do not edit anchors to go green.")
@@ -214,12 +202,7 @@ def test_m_h1_entry_sets_match():
 
 def test_m_h2_order_identical():
     """M-H2 same order. Red conditions: a structured copy parses in an order other
-    than ascending 1..7 (the judge order was swapped), or the first-occurrence
-    offsets of the seven SKILL.md anchors are not strictly increasing. The SKILL
-    side is not judged when anchors are missing — order presupposes a complete set,
-    and M-H1 already records missing items. Entry 4 uses the merged phrase
-    "pending without receipt" as its anchor so that a bare pending in the section's
-    opening sentence does not steal its position (scheduler decision)."""
+    than ascending 1..6 (the judge order was swapped)."""
     doc_entries = _parse_ordered(_hook_entry_doc(),
                                  "scripts/hook_entry.py docstring")
     md_section = _section(_read(HOOKS_MD_REL), "Judge order and exit codes",
@@ -228,23 +211,11 @@ def test_m_h2_order_identical():
     for entries, where in ((doc_entries, "scripts/hook_entry.py docstring"),
                            (md_entries, "references/hooks.md")):
         nums = [no for no, _, _ in entries]
-        if nums != list(range(1, 8)):
+        if nums != list(range(1, 7)):
             raise HooksContractError(
                 f"[hooks_contract] M-H2 same order: {where} judge-order line order is "
-                f"{nums}, expected ascending 1..7 — order is the performance budget; the "
+                f"{nums}, expected ascending 1..6 — order is the performance budget; the "
                 "two fast paths never touch disk, so a swap = every turn's Stop pays disk IO for nothing")
-
-    skill_section = _section(_read("SKILL.md"), "Host hooks", "SKILL.md")
-    offsets = [skill_section.find(anchor) for _, _, anchor, _ in FROZEN_TABLE]
-    if -1 in offsets:
-        return    # not all seven anchors present: order is undefined; M-H1 reports the gap explicitly, do not fake it here
-    for i in range(len(offsets) - 1):
-        if offsets[i + 1] <= offsets[i]:
-            raise HooksContractError(
-                f"[hooks_contract] M-H2 same order: SKILL.md host-hook section anchor "
-                f'"{FROZEN_TABLE[i + 1][2]}" (offset {offsets[i + 1]}) is not strictly after '
-                f'anchor "{FROZEN_TABLE[i][2]}" (offset {offsets[i]}) — '
-                "condensed-section anchor order must increase along judge order 1→7")
 
 
 def test_m_h3_exit_code_mapping():
@@ -255,8 +226,6 @@ def test_m_h3_exit_code_mapping():
         ("scripts/hook_entry.py docstring (full text)", _hook_entry_doc()),
         ("references/hooks.md (judge order and exit codes section)",
          _section(_read(HOOKS_MD_REL), "Judge order and exit codes", "references/hooks.md")),
-        ("SKILL.md (host hooks section)",
-         _section(_read("SKILL.md"), "Host hooks", "SKILL.md")),
     )
     reds = []
     for name, text in scopes:
